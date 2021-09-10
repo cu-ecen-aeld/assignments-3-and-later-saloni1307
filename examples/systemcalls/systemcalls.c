@@ -47,23 +47,21 @@ bool do_exec(int count, ...)
 	printf("----------do_exec start\n");
     va_list args;
     va_start(args, count);
-    char * command[count];
-    char * argument[count-1];
+    char * command[count+1];
+    char * argument[count];
     pid_t fork_ret;
-    int exec_ret=0, wait_ret=0;
+    int wait_ret=0;
     int i, status;
     int j=0, k=1;
 
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
-	printf("command[%d]=%s\n",i,command[i]);
     }
     command[count] = NULL;
 
     for(j=0; j<count-1; j++) {
 	argument[j] = command[k];
-	printf("argument[%d]=%s\n",j,argument[j]);
 	k++;
     }
 //    command[count] = NULL;
@@ -83,36 +81,34 @@ bool do_exec(int count, ...)
 */
 
     fork_ret = fork();
+    printf("fork_ret=%d\n",fork_ret);
     if(fork_ret==-1) {
-	    printf("--------Fork failed\n");
+
 	    return false;
     }
 
     else if(fork_ret==0) {
-	     for(int s=0; s<count; s++) {
-		     printf("exec_argument[%d]=%s\n",s,argument[s]);
-	     }
 	     execv(command[0], argument);
-	     perror("in execv");
-	     printf("--------After execv, exec-ret=%d\n",exec_ret);
-	     return false;
-
-    if(exec_ret==-1) {
-	     printf("--------Exec failed\n");
-	     return false;
-    }
+	     exit(-1);
     }
 
     wait_ret = waitpid(fork_ret, &status, 0);
+    printf("wait_ret=%d\n",wait_ret);
     if(wait_ret==-1) {
 	   printf("---------Wait failed\n");
 	   return false;
     } 
 
-   /* else if(WIFEXITED(status)) {
+    
+    else if(WIFEXITED(status)) {
 	    printf("--------Return exit status\n");
-	    return WEXITSTATUS(status);
-    }*/
+	    printf("status=%d\n",status);
+	    int exit_status=WEXITSTATUS(status);
+	    printf("exit_status=%d\n",exit_status);
+	    if(exit_status!=0)
+		    return false;
+	    // return !WEXITSTATUS(status);
+    }
 
     va_end(args);
 
