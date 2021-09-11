@@ -54,7 +54,7 @@ bool do_exec(int count, ...)
 
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);  //store the function arguments in an array
+	     command[i] = va_arg(args, char *);  //store the function arguments in an array
     }
     command[count] = NULL;
 
@@ -69,21 +69,29 @@ bool do_exec(int count, ...)
 */
 
     fork_ret = fork();      //fork a process
-    if(fork_ret==-1) {
+    if(fork_ret==-1)
+    {
+	     perror("fork");
 	    return false;
     }
 
-    else if(fork_ret==0) {
+    else if(fork_ret==0)
+    {
 	     execv(command[0], &command[0]);    //execute the command passed using execv
+	     perror("execv");
 	     exit(-1);      //exit child process if execv call failed
     }
 
     wait_ret = waitpid(fork_ret, &status, 0);   //wait for process status change
-    if(wait_ret==-1) {
-	   return false;
+    if(wait_ret==-1)
+    {
+	    perror("waitpid");
+	    return false;
     } 
  
-    else if(WIFEXITED(status)) {                //check if system exited
+    else if(WIFEXITED(status))
+    {
+	    //check if system exited
 	    int exit_status=WEXITSTATUS(status);
 	    if(exit_status!=0)                      //check the process exit status
 		    return false;                       //return false if process failed
@@ -107,8 +115,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int i;
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);      // store function arguments in an array
+	    command[i] = va_arg(args, char *);      // store function arguments in an array
     }
+
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
@@ -128,24 +137,26 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);  //open file to be redirected to 
     if (fd < 0)
     {
-       	perror("open");
-       	return false;
+	    perror("open");
+	    return false;
     }
 
     kidpid = fork();    //fork the parent process
 
     if(kidpid==-1) 
     {
-        perror("fork");
-        return false;
+	    perror("fork");
+	    return false;
     }
+
     else if(kidpid==0) 
     {
-        if(dup2(fd, 1) < 0)     //assign a new file descriptor to the file previously opened
-        {
-            perror("dup2");
-            return false;
+	    if(dup2(fd, 1) < 0)     //assign a new file descriptor to the file previously opened
+	    {
+		    perror("dup2");
+		    return false;
 	    }
+
 	    close(fd);              //close the old file descriptor
 	    execv(command[0], command); //execute the child process
 	    perror("execv");
@@ -153,18 +164,20 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     }
 
     wait_ret = waitpid(kidpid, &status, 0);     //wait for status change of child process
+
     if(wait_ret==-1) 
     {
-        return false;
+	    perror("waitpid");
+	    return false;
     }
 
     else if(WIFEXITED(status)) 
     {
-        int exit_status=WEXITSTATUS(status);    //check exit status of the child process
-        if(exit_status!=0) 
-        {
-            return false;
-        }
+	    int exit_status=WEXITSTATUS(status);    //check exit status of the child process
+	    if(exit_status!=0) 
+	    {
+		    return false;
+            }
     }
 
     va_end(args);
