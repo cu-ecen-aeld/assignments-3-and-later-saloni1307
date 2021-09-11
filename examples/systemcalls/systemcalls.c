@@ -19,13 +19,14 @@ bool do_system(const char *cmd)
 */
     int sys=0;
 
-    sys=system(cmd);
-//	printf("sys value=======%d",sys);
-    if(sys==0) {
-	    return true;
+    sys=system(cmd);    //call system() to execute the command as a child process
+
+    if(sys==0) 
+    {
+	    return true;    //return true if execution successful
     }
 
-    return false;
+    return false;       //return false on unsuccessful execution
 }
 
 /**
@@ -44,31 +45,18 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
-	printf("----------do_exec start\n");
     va_list args;
     va_start(args, count);
     char * command[count+1];
-    char * argument[count];
     pid_t fork_ret;
     int wait_ret=0;
     int i, status;
-    int j=0, k=1;
 
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);
+        command[i] = va_arg(args, char *);  //store the function arguments in an array
     }
     command[count] = NULL;
-
-    for(j=0; j<count-1; j++) {
-	argument[j] = command[k];
-	k++;
-    }
-//    command[count] = NULL;
-    argument[count-1]=NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-   // command[count] = command[count];
 
 /*
  * TODO:
@@ -80,34 +68,25 @@ bool do_exec(int count, ...)
  *   
 */
 
-    fork_ret = fork();
-    printf("fork_ret=%d\n",fork_ret);
+    fork_ret = fork();      //fork a process
     if(fork_ret==-1) {
-
 	    return false;
     }
 
     else if(fork_ret==0) {
-	     execv(command[0], argument);
-	     exit(-1);
+	     execv(command[0], &command[0]);    //execute the command passed using execv
+	     exit(-1);      //exit child process if execv call failed
     }
 
-    wait_ret = waitpid(fork_ret, &status, 0);
-    printf("wait_ret=%d\n",wait_ret);
+    wait_ret = waitpid(fork_ret, &status, 0);   //wait for process status change
     if(wait_ret==-1) {
-	   printf("---------Wait failed\n");
 	   return false;
     } 
-
-    
-    else if(WIFEXITED(status)) {
-	    printf("--------Return exit status\n");
-	    printf("status=%d\n",status);
+ 
+    else if(WIFEXITED(status)) {                //check if system exited
 	    int exit_status=WEXITSTATUS(status);
-	    printf("exit_status=%d\n",exit_status);
-	    if(exit_status!=0)
-		    return false;
-	    // return !WEXITSTATUS(status);
+	    if(exit_status!=0)                      //check the process exit status
+		    return false;                       //return false if process failed
     }
 
     va_end(args);
@@ -128,7 +107,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int i;
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);
+        command[i] = va_arg(args, char *);      // store function arguments in an array
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
@@ -143,6 +122,50 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *   
 */
+
+    int kidpid, status;
+    int wait_ret=0;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);  //open file to be redirected to 
+    if (fd < 0)
+    {
+       	perror("open");
+       	return false;
+    }
+
+    kidpid = fork();    //fork the parent process
+
+    if(kidpid==-1) 
+    {
+        perror("fork");
+        return false;
+    }
+    else if(kidpid==0) 
+    {
+        if(dup2(fd, 1) < 0)     //assign a new file descriptor to the file previously opened
+        {
+            perror("dup2");
+            return false;
+	    }
+	    close(fd);              //close the old file descriptor
+	    execv(command[0], command); //execute the child process
+	    perror("execv");
+	    exit(-1);
+    }
+
+    wait_ret = waitpid(kidpid, &status, 0);     //wait for status change of child process
+    if(wait_ret==-1) 
+    {
+        return false;
+    }
+
+    else if(WIFEXITED(status)) 
+    {
+        int exit_status=WEXITSTATUS(status);    //check exit status of the child process
+        if(exit_status!=0) 
+        {
+            return false;
+        }
+    }
 
     va_end(args);
     

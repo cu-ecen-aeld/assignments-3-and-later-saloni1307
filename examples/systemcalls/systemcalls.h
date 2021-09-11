@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+#include <fcntl.h>
 
 bool do_system(const char *command);
 
