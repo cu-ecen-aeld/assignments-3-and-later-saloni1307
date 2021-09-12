@@ -106,21 +106,18 @@ sudo mknod -m 600 dev/console c 5 1
 echo "Make device nodes"
 
 # TODO: Clean and build the writer utility
-cd /home/saloni/assignment-2-saloni1307/finder-app
+cd ${FINDER_APP_DIR}
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
 echo "Build writer utility"
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cd ${OUTDIR}/rootfs/home
-mkdir conf
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/conf/assignment.txt ${OUTDIR}/rootfs/home/conf
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/conf/username.txt ${OUTDIR}/rootfs/home/conf
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/finder-test.sh ${OUTDIR}/rootfs/home
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/finder.sh ${OUTDIR}/rootfs/home
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/writer ${OUTDIR}/rootfs/home
-cp /home/saloni/assignments-3-and-later-saloni1307/finder-app/autorun-qemu.sh ${OUTDIR}/rootfs/home
+cp ./conf/ -r ${OUTDIR}/rootfs/home
+cp ./finder-test.sh ${OUTDIR}/rootfs/home
+cp ./finder.sh ${OUTDIR}/rootfs/home
+cp ./writer ${OUTDIR}/rootfs/home
+cp ./autorun-qemu.sh ${OUTDIR}/rootfs/home
 
 echo "Copy finder scripts to /rootfs/home"
 
