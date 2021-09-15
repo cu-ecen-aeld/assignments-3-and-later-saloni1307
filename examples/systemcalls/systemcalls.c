@@ -19,13 +19,14 @@ bool do_system(const char *cmd)
 */
     int sys=0;
 
-    sys=system(cmd);
-//	printf("sys value=======%d",sys);
-    if(sys==0) {
-	    return true;
+    sys=system(cmd);    //call system() to execute the command as a child process
+
+    if(sys==0) 
+    {
+	    return true;    //return true if execution successful
     }
 
-    return false;
+    return false;       //return false on unsuccessful execution
 }
 
 /**
@@ -44,33 +45,18 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
-	printf("----------do_exec start\n");
     va_list args;
     va_start(args, count);
-    char * command[count];
-    char * argument[count-1];
+    char * command[count+1];
     pid_t fork_ret;
-    int exec_ret=0, wait_ret=0;
+    int wait_ret=0;
     int i, status;
-    int j=0, k=1;
 
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);
-	printf("command[%d]=%s\n",i,command[i]);
+	     command[i] = va_arg(args, char *);  //store the function arguments in an array
     }
     command[count] = NULL;
-
-    for(j=0; j<count-1; j++) {
-	argument[j] = command[k];
-	printf("argument[%d]=%s\n",j,argument[j]);
-	k++;
-    }
-//    command[count] = NULL;
-    argument[count-1]=NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-   // command[count] = command[count];
 
 /*
  * TODO:
@@ -82,37 +68,34 @@ bool do_exec(int count, ...)
  *   
 */
 
-    fork_ret = fork();
-    if(fork_ret==-1) {
-	    printf("--------Fork failed\n");
+    fork_ret = fork();      //fork a process
+    if(fork_ret==-1)
+    {
+	     perror("fork");
 	    return false;
     }
 
-    else if(fork_ret==0) {
-	     for(int s=0; s<count; s++) {
-		     printf("exec_argument[%d]=%s\n",s,argument[s]);
-	     }
-	     execv(command[0], argument);
-	     perror("in execv");
-	     printf("--------After execv, exec-ret=%d\n",exec_ret);
-	     return false;
-
-    if(exec_ret==-1) {
-	     printf("--------Exec failed\n");
-	     return false;
-    }
+    else if(fork_ret==0)
+    {
+	     execv(command[0], &command[0]);    //execute the command passed using execv
+	     perror("execv");
+	     exit(-1);      //exit child process if execv call failed
     }
 
-    wait_ret = waitpid(fork_ret, &status, 0);
-    if(wait_ret==-1) {
-	   printf("---------Wait failed\n");
-	   return false;
+    wait_ret = waitpid(fork_ret, &status, 0);   //wait for process status change
+    if(wait_ret==-1)
+    {
+	    perror("waitpid");
+	    return false;
     } 
-
-   /* else if(WIFEXITED(status)) {
-	    printf("--------Return exit status\n");
-	    return WEXITSTATUS(status);
-    }*/
+ 
+    else if(WIFEXITED(status))
+    {
+	    //check if system exited
+	    int exit_status=WEXITSTATUS(status);
+	    if(exit_status!=0)                      //check the process exit status
+		    return false;                       //return false if process failed
+    }
 
     va_end(args);
 
@@ -132,8 +115,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int i;
     for(i=0; i<count; i++)
     {
-        command[i] = va_arg(args, char *);
+	    command[i] = va_arg(args, char *);      // store function arguments in an array
     }
+
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
@@ -147,6 +131,54 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *   
 */
+
+    int kidpid, status;
+    int wait_ret=0;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);  //open file to be redirected to 
+    if (fd < 0)
+    {
+	    perror("open");
+	    return false;
+    }
+
+    kidpid = fork();    //fork the parent process
+
+    if(kidpid==-1) 
+    {
+	    perror("fork");
+	    return false;
+    }
+
+    else if(kidpid==0) 
+    {
+	    if(dup2(fd, 1) < 0)     //assign a new file descriptor to the file previously opened
+	    {
+		    perror("dup2");
+		    return false;
+	    }
+
+	    close(fd);              //close the old file descriptor
+	    execv(command[0], command); //execute the child process
+	    perror("execv");
+	    exit(-1);
+    }
+
+    wait_ret = waitpid(kidpid, &status, 0);     //wait for status change of child process
+
+    if(wait_ret==-1) 
+    {
+	    perror("waitpid");
+	    return false;
+    }
+
+    else if(WIFEXITED(status)) 
+    {
+	    int exit_status=WEXITSTATUS(status);    //check exit status of the child process
+	    if(exit_status!=0) 
+	    {
+		    return false;
+            }
+    }
 
     va_end(args);
     
