@@ -53,7 +53,7 @@ done
 
 OUTPUTSTRING=$(finder.sh "$WRITEDIR" "$WRITESTR")
 
-echo ${OUTPUTSTRING}>>${OUTPUTFILE}
+writer ${OUTPUTFILE} ${OUTPUTSTRING}
 
 set +e
 echo ${OUTPUTSTRING} | grep "${MATCHSTR}"
