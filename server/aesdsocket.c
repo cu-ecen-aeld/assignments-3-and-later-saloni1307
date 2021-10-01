@@ -26,7 +26,8 @@ int filefd, sockfd;
 
 void signal_handler() {
 
-	syslog(LOG_ERR, "Caught signal, exiting");
+	printf("Caught signal, exiting\n");
+	syslog(LOG_INFO, "Caught signal, exiting");
 
 	close(filefd);
 	close(sockfd);
@@ -51,7 +52,7 @@ int main() {
 	char str[INET_ADDRSTRLEN];
 	socklen_t addr_size;
 
-	int read_byte=0, write_byte=0, recv_byte=0, send_byte=0;
+	int write_byte=0, recv_byte=0, send_byte=0;
 	char *read_buffer = NULL;
 	char *write_buffer = NULL;
 	int rdbuff_size = 0;
@@ -83,7 +84,7 @@ int main() {
 		return -1;
 	}
 	
-		filefd = open(output_file, O_RDWR | O_CREAT, 0766);
+		filefd = open(output_file, O_RDWR | O_CREAT, 0666);
 	if(filefd < 0) {
 		perror("Open file");
 		return -1;
@@ -99,6 +100,7 @@ int main() {
 	}
 
 	inet_ntop(AF_INET, &ipAddr, str, INET_ADDRSTRLEN);
+	printf("Accepted connection from %s\n", str);
 	syslog(LOG_INFO, "Accepted connection from %s", str);
 
 	read_buffer = (char *)malloc((sizeof(char))*BUFFER_MAX);
@@ -109,7 +111,6 @@ int main() {
 
 	do {
 		recv_byte = recv(new_sockfd, buffer, sizeof(buffer), 0);
-
 		rdbuff_size += recv_byte;
 		strcpy(read_buffer, buffer);
 
@@ -127,11 +128,7 @@ int main() {
 		return -1;
 	}
 
-	read_byte = read(filefd, write_buffer, rdbuff_size);
-	if(read_byte != rdbuff_size) {
-		perror("File read");
-		return -1;
-	}
+	read(filefd, write_buffer, rdbuff_size);
 
 	send_byte = send(new_sockfd, write_buffer, strlen(write_buffer), 0);
 	if(send_byte != strlen(write_buffer)) {
@@ -143,6 +140,7 @@ int main() {
 	free(write_buffer);
 
 	close(new_sockfd);
+	printf("Closed connection from %s\n", str);
 	syslog(LOG_INFO, "Closed connection from %s", str);
 	}
 	return 0;
