@@ -21,6 +21,8 @@
 
 #define output_file "/var/tmp/aesdsocketdata"
 #define BUFFER_MAX 1024
+#define MAX_CONNECTS 10
+#define MAX_LINES 4096
 
 int filefd, sockfd;
 
@@ -52,6 +54,9 @@ int main() {
 	char str[INET_ADDRSTRLEN];
 	socklen_t addr_size;
 
+	long lines[MAX_LINES];
+	long line_number=0;
+
 	memset(buffer, '\0', BUFFER_MAX);
 
 	openlog(NULL, 0, LOG_USER);
@@ -75,13 +80,13 @@ int main() {
 		return -1;
 	}
 
-	rc = listen(sockfd, 3);
+	rc = listen(sockfd, MAX_CONNECTS);
 	if(rc<0) {
 		perror("Server listen");
 		return -1;
 	}
 	
-		filefd = open(output_file, O_RDWR | O_CREAT, 0666);
+		filefd = open(output_file, O_RDWR | O_CREAT, 0644);
 	if(filefd < 0) {
 		perror("Open file");
 		return -1;
@@ -100,14 +105,14 @@ int main() {
 	printf("Accepted connection from %s\n", str);
 	syslog(LOG_INFO, "Accepted connection from %s", str);
 
-	int write_byte=0, recv_byte=0, send_byte=0, read_byte=0;
+	long write_byte=0, recv_byte=0, send_byte=0, read_byte=0;
 	char *read_buffer = NULL;
 	char *write_buffer = NULL;
-	int rdbuff_size = 0, wrbuff_size=0;
-	int malloc_size = BUFFER_MAX; 
+	long rdbuff_size = 0;
+	long malloc_size = BUFFER_MAX;
+	int break_loop=0;
 
-	read_buffer = (char *)malloc((sizeof(char))*BUFFER_MAX);
-	memset(read_buffer, '\0', BUFFER_MAX);
+	read_buffer = (char *)malloc(sizeof(char)*BUFFER_MAX);
 	if(read_buffer == NULL) {
 		perror("Read Malloc failed");
 		return -1;
@@ -116,50 +121,51 @@ int main() {
 	do {
 		recv_byte = recv(new_sockfd, buffer, sizeof(buffer), 0);
 
+		if(!recv_byte || (strchr(buffer, '\n')!=NULL))
+			break_loop=1;
+
 		if((malloc_size - rdbuff_size) < recv_byte) {
-			int available_size = (malloc_size - rdbuff_size);
-			read_buffer = (char *)realloc(read_buffer, sizeof(char)*(recv_byte-available_size));
+				malloc_size += recv_byte;
+
+			read_buffer = (char *)realloc(read_buffer, sizeof(char)*malloc_size);
 		}
 
 		memcpy(&read_buffer[rdbuff_size], buffer, recv_byte);
 		rdbuff_size += recv_byte;
 
-	} while((recv_byte>0) || (strchr(buffer, '\n')==NULL));
+	} while(break_loop != 1);
 
-	printf("Read buffer= %s\n", read_buffer);
+	lines[line_number] = rdbuff_size;
+	line_number += 1;
 	write_byte = write(filefd, read_buffer, rdbuff_size);
 	if(write_byte != rdbuff_size) {
 		perror("File write");
 		return -1;
 	}
 
-	write_buffer = (char *)malloc((sizeof(char))*rdbuff_size);
-	memset(&write_buffer[wrbuff_size], '\0', rdbuff_size);
+	lseek(filefd, 0, SEEK_SET);
+
+	for(long i=0; i<line_number; i++) {
+
+		write_buffer = (char *)malloc(sizeof(char)*lines[i]);
 	if(write_buffer == NULL) {
 		perror("Write malloc failed");
 		return -1;
 	}
-
-	printf("rdbuff_size = %d\n", rdbuff_size);
-	lseek(filefd, 0, SEEK_SET);
-	read_byte = read(filefd, write_buffer, rdbuff_size);
-	wrbuff_size += rdbuff_size;
-	printf("read_byte= %d\n", read_byte);
-	if(read_byte != rdbuff_size) {
+		read_byte = read(filefd, write_buffer, lines[i]);
+	if(read_byte != lines[i]) {
 		perror("File read");
 		return -1;
 	}
          
-	printf("write buffer= %s\n", write_buffer);
-	send_byte = send(new_sockfd, write_buffer, rdbuff_size, 0);
-	printf("send_byte= %d\n", send_byte);
-	if(send_byte != rdbuff_size) {
+	send_byte = send(new_sockfd, write_buffer, lines[i], 0);
+	if(send_byte != lines[i]) {
 		perror("Socket send");
 		return -1;
 	}
-
-	free(read_buffer);
 	free(write_buffer);
+	}
+	free(read_buffer);
 
 	close(new_sockfd);
 	printf("Closed connection from %s\n", str);
