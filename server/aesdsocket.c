@@ -46,16 +46,13 @@ int main() {
 	int port=9000;
 	int new_sockfd, rc;
 	struct sockaddr_in server_addr, new_addr;
-	char buffer[BUFFER_MAX];
+	char buffer[BUFFER_MAX]; //memset to null
 	struct sockaddr_in * pV4Addr = (struct sockaddr_in*)&new_addr;
 	struct in_addr ipAddr = pV4Addr->sin_addr;
 	char str[INET_ADDRSTRLEN];
 	socklen_t addr_size;
 
-	int write_byte=0, recv_byte=0, send_byte=0;
-	char *read_buffer = NULL;
-	char *write_buffer = NULL;
-	int rdbuff_size = 0;
+	memset(buffer, '\0', BUFFER_MAX);
 
 	openlog(NULL, 0, LOG_USER);
 
@@ -103,7 +100,14 @@ int main() {
 	printf("Accepted connection from %s\n", str);
 	syslog(LOG_INFO, "Accepted connection from %s", str);
 
+	int write_byte=0, recv_byte=0, send_byte=0, read_byte=0;
+	char *read_buffer = NULL;
+	char *write_buffer = NULL;
+	int rdbuff_size = 0, wrbuff_size=0;
+	int malloc_size = BUFFER_MAX; 
+
 	read_buffer = (char *)malloc((sizeof(char))*BUFFER_MAX);
+	memset(read_buffer, '\0', BUFFER_MAX);
 	if(read_buffer == NULL) {
 		perror("Read Malloc failed");
 		return -1;
@@ -111,27 +115,45 @@ int main() {
 
 	do {
 		recv_byte = recv(new_sockfd, buffer, sizeof(buffer), 0);
+
+		if((malloc_size - rdbuff_size) < recv_byte) {
+			int available_size = (malloc_size - rdbuff_size);
+			read_buffer = (char *)realloc(read_buffer, sizeof(char)*(recv_byte-available_size));
+		}
+
+		memcpy(&read_buffer[rdbuff_size], buffer, recv_byte);
 		rdbuff_size += recv_byte;
-		strcpy(read_buffer, buffer);
 
 	} while((recv_byte>0) || (strchr(buffer, '\n')==NULL));
 
-	write_byte = write(filefd, read_buffer, strlen(read_buffer));
-	if(write_byte != strlen(read_buffer)) {
+	printf("Read buffer= %s\n", read_buffer);
+	write_byte = write(filefd, read_buffer, rdbuff_size);
+	if(write_byte != rdbuff_size) {
 		perror("File write");
 		return -1;
 	}
 
 	write_buffer = (char *)malloc((sizeof(char))*rdbuff_size);
+	memset(&write_buffer[wrbuff_size], '\0', rdbuff_size);
 	if(write_buffer == NULL) {
 		perror("Write malloc failed");
 		return -1;
 	}
 
-	read(filefd, write_buffer, rdbuff_size);
-
-	send_byte = send(new_sockfd, write_buffer, strlen(write_buffer), 0);
-	if(send_byte != strlen(write_buffer)) {
+	printf("rdbuff_size = %d\n", rdbuff_size);
+	lseek(filefd, 0, SEEK_SET);
+	read_byte = read(filefd, write_buffer, rdbuff_size);
+	wrbuff_size += rdbuff_size;
+	printf("read_byte= %d\n", read_byte);
+	if(read_byte != rdbuff_size) {
+		perror("File read");
+		return -1;
+	}
+         
+	printf("write buffer= %s\n", write_buffer);
+	send_byte = send(new_sockfd, write_buffer, rdbuff_size, 0);
+	printf("send_byte= %d\n", send_byte);
+	if(send_byte != rdbuff_size) {
 		perror("Socket send");
 		return -1;
 	}
