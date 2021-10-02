@@ -12,50 +12,65 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <linux/fs.h>
 
 #define output_file "/var/tmp/aesdsocketdata"
-#define BUFFER_MAX 1024
+#define BUFFER_MAX 100
 #define MAX_CONNECTS 10
 #define MAX_LINES 4096
 
-int filefd, sockfd;
+int filefd, sockfd, new_sockfd;
 
 void signal_handler() {
 
-	printf("Caught signal, exiting\n");
 	syslog(LOG_INFO, "Caught signal, exiting");
 
+	
 	close(filefd);
 	close(sockfd);
 	closelog();
 
+
 	if(remove(output_file) < 0) {
 		perror("Delete tmp file");
+		exit(-1);
 	}
-
 	exit(0);
 }
 
 
-int main() {
+int main(int argc, char *argv[]) {
 
 	int port=9000;
-	int new_sockfd, rc;
+	int rc;
 	struct sockaddr_in server_addr, new_addr;
 	char buffer[BUFFER_MAX]; //memset to null
 	struct sockaddr_in * pV4Addr = (struct sockaddr_in*)&new_addr;
 	struct in_addr ipAddr = pV4Addr->sin_addr;
 	char str[INET_ADDRSTRLEN];
 	socklen_t addr_size;
-
+	int daemon=0;
 	long lines[MAX_LINES];
 	long line_number=0;
+	
+	if(argc == 1) {
+		daemon=0;
+	}
+	else if(argc > 2) {
+		perror("Invalid arguments");
+		return -1;
+	}
+	else if(argc == 2) {
+		if(strcmp(argv[1], "-d")==0)
+			daemon=1;
+	}
 
 	memset(buffer, '\0', BUFFER_MAX);
 
@@ -70,6 +85,11 @@ int main() {
 		return -1;
 	}
 
+	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))<0) {
+		perror("error in setsockopt");
+		return -1;
+	}
+
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(port);
 	server_addr.sin_addr.s_addr = INADDR_ANY; 
@@ -79,6 +99,34 @@ int main() {
 		perror("Server bind");
 		return -1;
 	}
+
+	if(daemon == 1 ) {
+		pid_t pid;
+		printf("Run as daemon\n\r");
+		signal(SIGCHLD, SIG_IGN);
+	        signal(SIGHUP, SIG_IGN);
+		pid = fork();
+		if(pid == -1)
+			return -1;
+		else if(pid != 0)
+			exit(EXIT_SUCCESS);
+
+		umask(0);
+
+		if(setsid() == -1)
+			return -1;
+
+		if(chdir("/") == -1)
+			return -1;
+
+	//	for(i=sysconf(_SC_OPEN_MAX); i >= 0; i--)
+	//		close(i);
+
+		open("/dev/null", O_RDWR);
+		dup(0);
+		dup(0);
+	}
+
 
 	rc = listen(sockfd, MAX_CONNECTS);
 	if(rc<0) {
@@ -102,7 +150,6 @@ int main() {
 	}
 
 	inet_ntop(AF_INET, &ipAddr, str, INET_ADDRSTRLEN);
-	printf("Accepted connection from %s\n", str);
 	syslog(LOG_INFO, "Accepted connection from %s", str);
 
 	long write_byte=0, recv_byte=0, send_byte=0, read_byte=0;
@@ -168,8 +215,11 @@ int main() {
 	free(read_buffer);
 
 	close(new_sockfd);
-	printf("Closed connection from %s\n", str);
+
 	syslog(LOG_INFO, "Closed connection from %s", str);
 	}
+	close(filefd);
+	closelog();
+	close(sockfd);
 	return 0;
 }
