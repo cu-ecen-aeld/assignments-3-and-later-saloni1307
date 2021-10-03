@@ -24,7 +24,6 @@
 #define output_file "/var/tmp/aesdsocketdata"
 #define BUFFER_MAX 100
 #define MAX_CONNECTS 10
-#define MAX_LINES 4096
 
 int filefd, sockfd, new_sockfd;
 
@@ -56,8 +55,8 @@ int main(int argc, char *argv[]) {
 	char str[INET_ADDRSTRLEN];
 	socklen_t addr_size;
 	int daemon=0;
-	long lines[MAX_LINES];
-	long line_number=0;
+
+	int wrbuff_size=0;
 	
 	//check command line arguments
 	if(argc == 1) {
@@ -201,9 +200,6 @@ int main(int argc, char *argv[]) {
 			
 		} while(break_loop != 1);
 		
-		lines[line_number] = rdbuff_size;
-		line_number += 1;
-		
 		//write from read_buffer in output file
 		write_byte = write(filefd, read_buffer, rdbuff_size);
 		if(write_byte != rdbuff_size) {
@@ -215,31 +211,29 @@ int main(int argc, char *argv[]) {
 		lseek(filefd, 0, SEEK_SET);
 		
 		//send contents writen in output file to client line by line
-		for(long i=0; i<line_number; i++) {
-		
-			write_buffer = (char *)malloc(sizeof(char)*lines[i]);
-			if(write_buffer == NULL) {
-				perror("Write malloc failed");
-				return -1;
-			}
+		wrbuff_size += rdbuff_size;
+		write_buffer = (char *)malloc(sizeof(char)*wrbuff_size);
+		if(write_buffer == NULL) {
+			perror("Write malloc failed");
+			return -1;
+		}
 			
-			//store contents os output file in write_buffer
-			read_byte = read(filefd, write_buffer, lines[i]);
-			if(read_byte != lines[i]) {
-				perror("File read");
-				return -1;
-			}
-			
-			//send contents of write_buffer to client
-			send_byte = send(new_sockfd, write_buffer, lines[i], 0);
-			if(send_byte != lines[i]) {
-				perror("Socket send");
-				return -1;
-			}
-			
-			free(write_buffer);
+		//store contents os output file in write_buffer
+		read_byte = read(filefd, write_buffer, wrbuff_size);
+		if(read_byte != wrbuff_size) {
+			perror("File read");
+			return -1;
 		}
 		
+		//send contents of write_buffer to client
+		send_byte = send(new_sockfd, write_buffer, wrbuff_size, 0);
+		if(send_byte != wrbuff_size) {
+			perror("Socket send");
+			return -1;
+		}
+		
+		free(write_buffer);
+	
 		free(read_buffer);
 		
 		close(new_sockfd);
