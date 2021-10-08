@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
 	socklen_t addr_size;
 	int daemon=0;
 
-	int wrbuff_size=0;
+//	int wrbuff_size=0;
 	
 	//check command line arguments
 	if(argc == 1) {
@@ -151,7 +151,8 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	while(1) {
+	while(1) {	//till we get a signal
+
 
 		addr_size = sizeof(new_addr);
 		
@@ -163,8 +164,10 @@ int main(int argc, char *argv[]) {
 		}
 		
 		inet_ntop(AF_INET, &ipAddr, str, INET_ADDRSTRLEN);
+		printf("Accepted connection from %s\n\r", str);
 		syslog(LOG_INFO, "Accepted connection from %s", str);
 
+while(1) {	//client sends \r
 		long write_byte=0, recv_byte=0, send_byte=0, read_byte=0;
 		char *read_buffer = NULL;
 		char *write_buffer = NULL;
@@ -173,6 +176,7 @@ int main(int argc, char *argv[]) {
 		int break_loop=0;
 		
 		read_buffer = (char *)malloc(sizeof(char)*BUFFER_MAX);
+		memset(read_buffer, '\0', BUFFER_MAX);
 		if(read_buffer == NULL) {
 			perror("Read Malloc failed");
 			return -1;
@@ -183,7 +187,7 @@ int main(int argc, char *argv[]) {
 			recv_byte = recv(new_sockfd, buffer, sizeof(buffer), 0);
 			
 			//check for new-line character
-			if(!recv_byte || (strchr(buffer, '\n')!=NULL))
+			if( (strchr(buffer, '\n')!=NULL))
 				break_loop=1;
 
 			//check if allocated buffer size is sufficient
@@ -196,10 +200,15 @@ int main(int argc, char *argv[]) {
 			
 			//copy received buffer in another read_buffer
 			memcpy(&read_buffer[rdbuff_size], buffer, recv_byte);
+			
 			rdbuff_size += recv_byte;
 			
+			if(recv_byte==0)
+				break_loop=0;
+
 		} while(break_loop != 1);
-		
+printf("buffer = %s\n\r", buffer);	
+	printf("Read_buffer = %s\n\r", read_buffer);	
 		//write from read_buffer in output file
 		write_byte = write(filefd, read_buffer, rdbuff_size);
 		if(write_byte != rdbuff_size) {
@@ -208,26 +217,28 @@ int main(int argc, char *argv[]) {
 		}
 		
 		//seek the start of the file
-		lseek(filefd, 0, SEEK_SET);
+		lseek(filefd, -rdbuff_size, SEEK_CUR);
 		
 		//send contents writen in output file to client line by line
-		wrbuff_size += rdbuff_size;
-		write_buffer = (char *)malloc(sizeof(char)*wrbuff_size);
+		//wrbuff_size += rdbuff_size;
+		write_buffer = (char *)malloc(sizeof(char)*(rdbuff_size+1));
+		memset(write_buffer, '\0', rdbuff_size+1);
 		if(write_buffer == NULL) {
 			perror("Write malloc failed");
 			return -1;
 		}
 			
 		//store contents os output file in write_buffer
-		read_byte = read(filefd, write_buffer, wrbuff_size);
-		if(read_byte != wrbuff_size) {
+		read_byte = read(filefd, write_buffer, rdbuff_size);
+		if(read_byte != rdbuff_size) {
 			perror("File read");
 			return -1;
 		}
-		
+
+		printf("Write_buffer = %s\n\r", write_buffer);
 		//send contents of write_buffer to client
-		send_byte = send(new_sockfd, write_buffer, wrbuff_size, 0);
-		if(send_byte != wrbuff_size) {
+		send_byte = send(new_sockfd, write_buffer, rdbuff_size, 0);
+		if(send_byte != rdbuff_size) {
 			perror("Socket send");
 			return -1;
 		}
@@ -236,9 +247,6 @@ int main(int argc, char *argv[]) {
 	
 		free(read_buffer);
 		
-		close(new_sockfd);
-		
-		syslog(LOG_INFO, "Closed connection from %s", str);
 		
 	}
 	
@@ -248,6 +256,11 @@ int main(int argc, char *argv[]) {
 	
 	close(sockfd);
 	
+		close(new_sockfd);
+		
+		printf("Closed connection from %s\n\r", str);
+		syslog(LOG_INFO, "Closed connection from %s", str);
+	}
 	if(remove(output_file) < 0) {
 		perror("Delete tmp file");
 		return -1;
