@@ -1,9 +1,6 @@
-//opens a stream socket bound to port 9000
-//listens and accepts a connection
-//log message
-//receives data over connection
-//
-//
+/*******************************************************/
+/* AESD Assignment 5 - socket server code              */
+/*******************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +33,7 @@ void signal_handler(int signo)
 	if (signo == SIGINT || signo == SIGTERM)
 	{
 		syslog(LOG_INFO, "Caught signal, exiting");
+		printf("Caught Signal, Exiting\n\r");
 
 		if (shutdown(sockfd, SHUT_RDWR))
 		{
@@ -172,6 +170,7 @@ int main(int argc, char *argv[])
 		dup(0);
 		dup(0);
 	}
+
 	//listen for connections
 	rc = listen(sockfd, MAX_CONNECTS);
 	if (rc < 0)
@@ -205,16 +204,13 @@ int main(int argc, char *argv[])
 		printf("Accepted connection from %s\n\r", str);
 		syslog(LOG_INFO, "Accepted connection from %s", str);
 
-#if BLOCK_SIGNALS
-#endif
-
 		long write_byte = 0, recv_byte = 0, send_byte = 0, read_byte = 0;
 		char *read_buffer = NULL;
 		char *write_buffer = NULL;
 		long rdbuff_size = 0;
 		long malloc_size = BUFFER_MAX, realloc_size = BUFFER_MAX;
 		int break_loop = 0;
-		long cur_pos = 0;
+		long cur_pos = 0, end_pos = 0, required_memory = 0;
 		long bytes = 0;
 
 		read_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
@@ -245,12 +241,10 @@ int main(int argc, char *argv[])
 
 			//copy received buffer in another read_buffer
 			memcpy(&read_buffer[rdbuff_size], buffer, recv_byte);
-			printf("recv_byte=%ld\n\r", recv_byte);
+
 			rdbuff_size += recv_byte;
 
 		} while (break_loop != 1);
-
-		printf("Read_buffer = %s\n\r", read_buffer);
 
 		break_loop = 0;
 		//write from read_buffer in output file
@@ -261,14 +255,15 @@ int main(int argc, char *argv[])
 			goto cleanup;
 		}
 
-		cur_pos = lseek(filefd, 0, SEEK_END);
-		printf("cur_pos = %ld\n\r", cur_pos);
+		end_pos = lseek(filefd, 0, SEEK_END);
+
 		//seek the start of the file
 		lseek(filefd, 0, SEEK_SET);
 
-		while (bytes != cur_pos)
+		while (bytes != end_pos)
 		{
 			wrbuff_size = 0;
+			required_memory = end_pos - cur_pos;		//get the required memory size for one line
 
 			//send contents writen in output file to client line by line
 			write_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
@@ -284,15 +279,15 @@ int main(int argc, char *argv[])
 			{
 
 				//store contents os output file in write_buffer
-				read_byte = read(filefd, write_buffer+wrbuff_size, sizeof(char));
+				read_byte = read(filefd, write_buffer + wrbuff_size, sizeof(char));
 
 				//check for new-line character
 				if ((strchr(write_buffer, '\n') != NULL))
 					break_loop = 1;
 
-				if ((realloc_size - wrbuff_size) < cur_pos)
+				if (realloc_size < required_memory)
 				{
-					realloc_size += cur_pos;
+					realloc_size += required_memory;
 					write_buffer = (char *)realloc(write_buffer, sizeof(char) * realloc_size);
 				}
 
@@ -303,9 +298,9 @@ int main(int argc, char *argv[])
 			break_loop = 0;
 			bytes += wrbuff_size;
 
-			//printf("bytes=%ld, wrbuff_size=%d, Write_buffer = %s ", bytes, wrbuff_size, write_buffer);
+			cur_pos = lseek(filefd, 0, SEEK_CUR);
+
 			//send contents of write_buffer to client
-			//
 			send_byte = send(new_sockfd, write_buffer, wrbuff_size, 0);
 			if (send_byte != wrbuff_size)
 			{
@@ -322,6 +317,7 @@ int main(int argc, char *argv[])
 		printf("Closed connection from %s\n\r", str);
 		syslog(LOG_INFO, "Closed connection from %s", str);
 	}
+
 cleanup:
 	if (cleanup() < 0)
 	{
