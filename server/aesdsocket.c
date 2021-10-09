@@ -24,7 +24,7 @@
 
 int filefd, sockfd, new_sockfd;
 
-char str[INET_ADDRSTRLEN];
+char *str;
 int signal_exit_code = 0;
 
 void signal_handler(int signo)
@@ -78,8 +78,8 @@ int main(int argc, char *argv[])
 	int rc;
 	struct sockaddr_in server_addr, new_addr;
 	char buffer[BUFFER_MAX];
-	struct sockaddr_in *pV4Addr = (struct sockaddr_in *)&new_addr;
-	struct in_addr ipAddr = pV4Addr->sin_addr;
+	//struct sockaddr_in *pV4Addr = (struct sockaddr_in *)&new_addr;
+	//struct in_addr ipAddr = pV4Addr->sin_addr;
 	socklen_t addr_size;
 	int daemon = 0;
 
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
 			goto cleanup;
 		}
 
-		inet_ntop(AF_INET, &ipAddr, str, INET_ADDRSTRLEN);
+		str = inet_ntoa(new_addr.sin_addr);
 		printf("Accepted connection from %s\n\r", str);
 		syslog(LOG_INFO, "Accepted connection from %s", str);
 
@@ -212,6 +212,7 @@ int main(int argc, char *argv[])
 		int break_loop = 0;
 		long cur_pos = 0, end_pos = 0, required_memory = 0;
 		long bytes = 0;
+		char *new_line = NULL;
 
 		read_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
 		memset(read_buffer, '\0', BUFFER_MAX);
@@ -266,8 +267,8 @@ int main(int argc, char *argv[])
 			required_memory = end_pos - cur_pos;		//get the required memory size for one line
 
 			//send contents writen in output file to client line by line
-			write_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
-			memset(write_buffer, '\0', BUFFER_MAX);
+			write_buffer = (char *)malloc(sizeof(char)*BUFFER_MAX);
+			//memset(write_buffer, '\0', BUFFER_MAX);
 
 			if (write_buffer == NULL)
 			{
@@ -282,8 +283,8 @@ int main(int argc, char *argv[])
 				read_byte = read(filefd, write_buffer + wrbuff_size, sizeof(char));
 
 				//check for new-line character
-				if ((strchr(write_buffer, '\n') != NULL))
-					break_loop = 1;
+				//if ((strchr(write_buffer, '\n') != NULL))
+				//	break_loop = 1;
 
 				if (realloc_size < required_memory)
 				{
@@ -293,9 +294,12 @@ int main(int argc, char *argv[])
 
 				wrbuff_size += read_byte;
 
-			} while (break_loop != 1);
+				if(wrbuff_size > 1)
+					new_line = strchr(write_buffer, '\n');
 
-			break_loop = 0;
+			} while (new_line == NULL);
+
+			//break_loop = 0;
 			bytes += wrbuff_size;
 
 			cur_pos = lseek(filefd, 0, SEEK_CUR);
