@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/queue.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -19,6 +20,7 @@
 #include <signal.h>
 #include <linux/fs.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "queue.h"
 
@@ -48,10 +50,9 @@ struct thread_data
 struct slist_data_s
 {
 	struct thread_data thread_param;
-	SLIST_ENTRY(slist_data_s) entries;
+	SLIST_ENTRY(slist_data_s)
+	entries;
 };
-
-struct slist_data_s *datap = NULL;
 
 void signal_handler(int signo)
 {
@@ -75,13 +76,6 @@ int cleanup()
 
 	printf("in cleanup\n\r");
 
-	if (datap != NULL)
-	{
-		free(datap);
-		datap = NULL;
-	}
-
-	printf("datap freed\n\r");
 	pthread_mutex_destroy(&data_mutex);
 
 	close(filefd);
@@ -90,7 +84,6 @@ int cleanup()
 
 	close(sockfd);
 
-	printf("closed everything\n\r");
 	close(new_sockfd);
 
 	if (signal_exit_code)
@@ -104,6 +97,60 @@ int cleanup()
 	}
 
 	return 0;
+}
+
+static inline void timespec_add(struct timespec *result,
+								const struct timespec *ts_1, const struct timespec *ts_2)
+{
+	result->tv_sec = ts_1->tv_sec + ts_2->tv_sec;
+	result->tv_nsec = ts_1->tv_nsec + ts_2->tv_nsec;
+	if (result->tv_nsec > 1000000000L)
+	{
+		result->tv_nsec -= 1000000000L;
+		result->tv_sec++;
+	}
+}
+
+static void timer_thread()
+{
+
+	time_t rawtime;
+	struct tm *info;
+	int timer_size, timer_write;
+	char *buff = malloc(sizeof(char) * BUFFER_MAX);
+
+	time(&rawtime);
+
+	info = localtime(&rawtime);
+
+	timer_size = strftime(buff, BUFFER_MAX, "timestamp:%Y %b %a - %H:%M:%S\n", info);
+	if(timer_size == 0) {
+		perror("timestamp");
+		goto exit_timer;
+	}
+
+	if (pthread_mutex_lock(&data_mutex) != 0)
+	{
+		perror("timer data lock!\n");
+		goto exit_timer;
+	}
+	else
+	{
+		timer_write = write(filefd, buff, timer_size);
+		if(timer_write != timer_size) {
+			perror("writing timestamp in file");
+			goto exit_timer;
+		}
+
+		if (pthread_mutex_unlock(&data_mutex) != 0)
+		{
+			perror("unlock timer data!\n");
+			goto exit_timer;
+		}
+	}
+
+exit_timer:
+	free(buff);
 }
 
 void *thread_func(void *thread_param)
@@ -123,13 +170,14 @@ void *thread_func(void *thread_param)
 	long bytes = 0;
 	char *new_line = NULL;
 
-		printf("Executing thread with fd = %d\n\r", th_newfd);
+	printf("Executing thread with fd = %d\n\r", th_newfd);
 
 	read_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
 	memset(read_buffer, '\0', BUFFER_MAX);
 	if (read_buffer == NULL)
 	{
 		perror("Read Malloc failed");
+		goto exit;
 	}
 
 	do
@@ -158,7 +206,7 @@ void *thread_func(void *thread_param)
 	} while (break_loop != 1);
 
 	break_loop = 0;
-	printf("rdbuff_size=%ld\n\r", rdbuff_size);
+
 	pthread_mutex_lock(&data_mutex);
 
 	//write from read_buffer in output file
@@ -166,6 +214,7 @@ void *thread_func(void *thread_param)
 	if (write_byte != rdbuff_size)
 	{
 		perror("File write");
+		goto exit;
 	}
 
 	end_pos = lseek(filefd, 0, SEEK_END);
@@ -182,11 +231,11 @@ void *thread_func(void *thread_param)
 
 		//send contents writen in output file to client line by line
 		write_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
-		//memset(write_buffer, '\0', BUFFER_MAX);
 
 		if (write_buffer == NULL)
 		{
 			perror("Write malloc failed");
+			goto exit;
 		}
 
 		pthread_mutex_lock(&data_mutex);
@@ -210,10 +259,8 @@ void *thread_func(void *thread_param)
 
 		} while (new_line == NULL);
 
-		//break_loop = 0;
+		pthread_mutex_unlock(&data_mutex);
 		bytes += wrbuff_size;
-
-		printf("bytes=%ld\n\r", bytes);
 
 		cur_pos = lseek(filefd, 0, SEEK_CUR);
 
@@ -222,21 +269,24 @@ void *thread_func(void *thread_param)
 		if (send_byte != wrbuff_size)
 		{
 			perror("Socket send");
+			goto exit;
 		}
 
 		free(write_buffer);
 	}
 
-	pthread_mutex_unlock(&data_mutex);
 	free(read_buffer);
-
 	close(th_newfd);
 
 	printf("Closed connection from %s\n\r", str);
 	syslog(LOG_INFO, "Closed connection from %s", str);
 
 	ind_param->thread_complete = true;
-	pthread_exit(ind_param);
+
+exit:
+	pthread_exit(NULL);
+
+	return ind_param;
 }
 
 int main(int argc, char *argv[])
@@ -245,10 +295,17 @@ int main(int argc, char *argv[])
 	int port = 9000;
 	int rc;
 	struct sockaddr_in server_addr, new_addr;
-	//struct sockaddr_in *pV4Addr = (struct sockaddr_in *)&new_addr;
-	//struct in_addr ipAddr = pV4Addr->sin_addr;
 	socklen_t addr_size;
 	int daemon = 0;
+
+	struct sigevent sev;
+	struct timespec start_time;
+	timer_t timerid;
+
+	int clock_id = CLOCK_MONOTONIC;
+	memset(&sev, 0, sizeof(struct sigevent));
+
+	struct slist_data_s *datap = NULL;
 
 	//check command line arguments
 	if (argc == 1)
@@ -270,7 +327,8 @@ int main(int argc, char *argv[])
 
 	openlog(NULL, 0, LOG_USER);
 
-	SLIST_HEAD(slisthead, slist_data_s) head;
+	SLIST_HEAD(slisthead, slist_data_s)
+	head;
 	SLIST_INIT(&head);
 
 	signal(SIGTERM, signal_handler);
@@ -358,6 +416,33 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
+	sev.sigev_notify = SIGEV_THREAD;
+	sev.sigev_notify_function = timer_thread;
+
+	if (timer_create(clock_id, &sev, &timerid) != 0)
+	{
+		perror("timer create");
+		goto cleanup;
+	}
+
+	if (clock_gettime(clock_id, &start_time) != 0)
+	{
+		perror("clock get time");
+		goto cleanup;
+	}
+	else
+	{
+		struct itimerspec itimerspec;
+		itimerspec.it_interval.tv_sec = 10;
+		itimerspec.it_interval.tv_nsec = 1000000;
+		timespec_add(&itimerspec.it_value, &start_time, &itimerspec.it_interval);
+		if (timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL) != 0)
+		{
+			perror("timer set time");
+			goto cleanup;
+		}
+	}
+
 	while (!signal_exit_code)
 	{ //till we get a signal
 
@@ -376,44 +461,40 @@ int main(int argc, char *argv[])
 		syslog(LOG_INFO, "Accepted connection from %s", str);
 
 		datap = malloc(sizeof(struct slist_data_s));
-		datap->thread_param.thread_sockfd = new_sockfd;
-		datap->thread_param.thread_complete = false;
+		(datap->thread_param).thread_sockfd = new_sockfd;
+		(datap->thread_param).thread_complete = false;
 
 		SLIST_INSERT_HEAD(&head, datap, entries);
 
-		if (pthread_create(&(datap->thread_param.mythread), NULL, &thread_func, (void *)&(datap->thread_param)) != 0)
+		if (pthread_create(&((datap->thread_param).mythread), NULL, &thread_func, (void *)&(datap->thread_param)) != 0)
 		{
 			printf("error in pthread_create\n");
 			goto cleanup;
 		}
-		else
-		{
-			printf("Thread created\n\r");
-			/*SLIST_FOREACH(datap, &head, entries) {
-				printf("\n");
-			}*/
-		}
 
 		SLIST_FOREACH(datap, &head, entries)
 		{
-			if (datap->thread_param.thread_complete == true)
+			if ((datap->thread_param).thread_complete == true)
 			{
-				if ((pthread_join(datap->thread_param.mythread, NULL)) != 0)
-				{
-					printf("error in pthread_join\n\r");
-					goto cleanup;
-				}
-
-				if (datap != NULL)
-				{
-					free(datap);
-					datap = NULL;
-				}
+				pthread_join((datap->thread_param).mythread, NULL);
 			}
 		}
 	}
 
 cleanup:
+
+	SLIST_FOREACH(datap, &head, entries)
+	{
+		pthread_join((datap->thread_param).mythread, NULL);
+	}
+
+	while (!SLIST_EMPTY(&head))
+	{
+		datap = SLIST_FIRST(&head);
+		SLIST_REMOVE_HEAD(&head, entries);
+		free(datap);
+	}
+
 	if (cleanup() < 0)
 	{
 		return -1;
