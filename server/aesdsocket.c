@@ -195,7 +195,7 @@ void *thread_func(void *thread_param)
 
 	printf("Executing thread with fd = %d\n\r", th_newfd);
 
-	read_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
+	read_buffer = (char *)malloc(sizeof(char *)*BUFFER_MAX);
 	memset(read_buffer, '\0', BUFFER_MAX);
 	if (read_buffer == NULL)
 	{
@@ -257,7 +257,7 @@ void *thread_func(void *thread_param)
 		required_memory = end_pos - cur_pos; //get the required memory size for one line
 
 		//send contents writen in output file to client line by line
-		write_buffer = (char *)malloc(sizeof(char) * BUFFER_MAX);
+		write_buffer = (char *)malloc(sizeof(char *) * BUFFER_MAX);
 
 		if (write_buffer == NULL)
 		{
