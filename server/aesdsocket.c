@@ -37,6 +37,9 @@ int signal_exit_code = 0;
 
 pthread_mutex_t data_mutex;
 
+	timer_t timerid;
+
+//parameters to be passed while thread creation
 struct thread_data
 {
 
@@ -57,11 +60,13 @@ struct slist_data_s
 void signal_handler(int signo)
 {
 
+	//if SIGINT or SIGTERM is caught
 	if (signo == SIGINT || signo == SIGTERM)
 	{
 		syslog(LOG_INFO, "Caught signal, exiting");
 		printf("Caught Signal, Exiting\n\r");
 
+		//shutdown the socket
 		if (shutdown(sockfd, SHUT_RDWR))
 		{
 			perror("Socket shutdown");
@@ -71,29 +76,38 @@ void signal_handler(int signo)
 	}
 }
 
+//function to gracefully shut down everything
 int cleanup()
 {
 
 	printf("in cleanup\n\r");
 
+	//destroy mutex
 	pthread_mutex_destroy(&data_mutex);
 
+	//close output file
 	close(filefd);
 
+	//close logging file
 	closelog();
 
+	//close server socket
 	close(sockfd);
-
-	close(new_sockfd);
 
 	if (signal_exit_code)
 	{
 
+		//delete output file
 		if (remove(output_file) < 0)
 		{
 			perror("Delete tmp file");
 			return -1;
 		}
+
+		if (timer_delete(timerid) != 0) {
+                perror("Error deleting timer!");
+                return -1;
+            }
 	}
 
 	return 0;
@@ -111,6 +125,7 @@ static inline void timespec_add(struct timespec *result,
 	}
 }
 
+//thread to be executed for timer
 static void timer_thread()
 {
 
@@ -123,12 +138,15 @@ static void timer_thread()
 
 	info = localtime(&rawtime);
 
+	//get the string for timestamp
 	timer_size = strftime(buff, BUFFER_MAX, "timestamp:%Y %b %a - %H:%M:%S\n", info);
-	if(timer_size == 0) {
+	if (timer_size == 0)
+	{
 		perror("timestamp");
 		goto exit_timer;
 	}
 
+	//get mutex lock for thread-safe writing to output file
 	if (pthread_mutex_lock(&data_mutex) != 0)
 	{
 		perror("timer data lock!\n");
@@ -136,12 +154,15 @@ static void timer_thread()
 	}
 	else
 	{
+		//write timestamp string to output file
 		timer_write = write(filefd, buff, timer_size);
-		if(timer_write != timer_size) {
+		if (timer_write != timer_size)
+		{
 			perror("writing timestamp in file");
 			goto exit_timer;
 		}
 
+		//release mutex lock
 		if (pthread_mutex_unlock(&data_mutex) != 0)
 		{
 			perror("unlock timer data!\n");
@@ -153,9 +174,11 @@ exit_timer:
 	free(buff);
 }
 
+//function to be executed on thread creation
 void *thread_func(void *thread_param)
 {
 
+	//get thread parameters
 	struct thread_data *ind_param = (struct thread_data *)thread_param;
 	int th_newfd = ind_param->thread_sockfd;
 
@@ -207,6 +230,7 @@ void *thread_func(void *thread_param)
 
 	break_loop = 0;
 
+	//get mutex lock for thread-safe writing in output file
 	pthread_mutex_lock(&data_mutex);
 
 	//write from read_buffer in output file
@@ -217,13 +241,16 @@ void *thread_func(void *thread_param)
 		goto exit;
 	}
 
+	//save the end of file
 	end_pos = lseek(filefd, 0, SEEK_END);
 
 	//seek the start of the file
 	lseek(filefd, 0, SEEK_SET);
 
+	//release mutex lock after writing to file
 	pthread_mutex_unlock(&data_mutex);
 
+	//execute read and send untill end of file reached
 	while (bytes != end_pos)
 	{
 		wrbuff_size = 0;
@@ -238,30 +265,37 @@ void *thread_func(void *thread_param)
 			goto exit;
 		}
 
+		//get mutex lock for thread-safe reading from output file
 		pthread_mutex_lock(&data_mutex);
 
 		do
 		{
 
-			//store contents os output file in write_buffer
+			//store contents of output file in write_buffer
 			read_byte = read(filefd, write_buffer + wrbuff_size, sizeof(char));
 
 			if (realloc_size < required_memory)
 			{
 				realloc_size += required_memory;
+
+				//realloc memory in case of insufficient space in buffer
 				write_buffer = (char *)realloc(write_buffer, sizeof(char) * realloc_size);
 			}
 
 			wrbuff_size += read_byte;
 
+			//search for newline character in the buffer
 			if (wrbuff_size > 1)
 				new_line = strchr(write_buffer, '\n');
 
 		} while (new_line == NULL);
+		//execute until we get a newline character
 
+		//release mutex lock
 		pthread_mutex_unlock(&data_mutex);
 		bytes += wrbuff_size;
 
+		//save the current position of file
 		cur_pos = lseek(filefd, 0, SEEK_CUR);
 
 		//send contents of write_buffer to client
@@ -284,6 +318,7 @@ void *thread_func(void *thread_param)
 	ind_param->thread_complete = true;
 
 exit:
+
 	pthread_exit(NULL);
 
 	return ind_param;
@@ -297,13 +332,12 @@ int main(int argc, char *argv[])
 	struct sockaddr_in server_addr, new_addr;
 	socklen_t addr_size;
 	int daemon = 0;
+	pid_t pid;
 
 	struct sigevent sev;
 	struct timespec start_time;
-	timer_t timerid;
 
 	int clock_id = CLOCK_MONOTONIC;
-	memset(&sev, 0, sizeof(struct sigevent));
 
 	struct slist_data_s *datap = NULL;
 
@@ -327,13 +361,16 @@ int main(int argc, char *argv[])
 
 	openlog(NULL, 0, LOG_USER);
 
+	//define head of linked list
 	SLIST_HEAD(slisthead, slist_data_s)
 	head;
+	//initialize linked list
 	SLIST_INIT(&head);
 
 	signal(SIGTERM, signal_handler);
 	signal(SIGINT, signal_handler);
 
+	//initialize mutex
 	if (pthread_mutex_init(&data_mutex, NULL) != 0)
 	{
 		printf("\n mutex init failed\n");
@@ -370,7 +407,6 @@ int main(int argc, char *argv[])
 	//run the program as a daemon
 	if (daemon == 1)
 	{
-		pid_t pid;
 		printf("Run as daemon\n\r");
 
 		signal(SIGCHLD, SIG_IGN);
@@ -416,31 +452,37 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
-	sev.sigev_notify = SIGEV_THREAD;
-	sev.sigev_notify_function = timer_thread;
+	//for timer functionality
+	if ((daemon == 0) || (pid == 0))
+	{
+		memset(&sev, 0, sizeof(struct sigevent));
+		sev.sigev_notify = SIGEV_THREAD;
+		sev.sigev_notify_function = timer_thread;
 
-	if (timer_create(clock_id, &sev, &timerid) != 0)
-	{
-		perror("timer create");
-		goto cleanup;
-	}
-
-	if (clock_gettime(clock_id, &start_time) != 0)
-	{
-		perror("clock get time");
-		goto cleanup;
-	}
-	else
-	{
-		struct itimerspec itimerspec;
-		itimerspec.it_interval.tv_sec = 10;
-		itimerspec.it_interval.tv_nsec = 1000000;
-		timespec_add(&itimerspec.it_value, &start_time, &itimerspec.it_interval);
-		if (timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL) != 0)
+		//create a timer
+		if (timer_create(clock_id, &sev, &timerid) != 0)
 		{
-			perror("timer set time");
+			perror("timer create");
 			goto cleanup;
 		}
+
+		//get start time
+		if (clock_gettime(clock_id, &start_time) != 0)
+		{
+			perror("clock get time");
+			goto cleanup;
+		}
+
+			//define timer interval values
+			struct itimerspec itimerspec;
+			itimerspec.it_interval.tv_sec = 10;
+			itimerspec.it_interval.tv_nsec = 1000000;
+			timespec_add(&itimerspec.it_value, &start_time, &itimerspec.it_interval);
+			if (timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL) != 0)
+			{
+				perror("timer set time");
+				goto cleanup;
+			}
 	}
 
 	while (!signal_exit_code)
@@ -460,18 +502,22 @@ int main(int argc, char *argv[])
 		printf("Accepted connection from %s\n\r", str);
 		syslog(LOG_INFO, "Accepted connection from %s", str);
 
+		//define thread parameters
 		datap = malloc(sizeof(struct slist_data_s));
 		(datap->thread_param).thread_sockfd = new_sockfd;
 		(datap->thread_param).thread_complete = false;
 
+		//insert a link in the list
 		SLIST_INSERT_HEAD(&head, datap, entries);
 
+		//create a thread
 		if (pthread_create(&((datap->thread_param).mythread), NULL, &thread_func, (void *)&(datap->thread_param)) != 0)
 		{
 			printf("error in pthread_create\n");
 			goto cleanup;
 		}
 
+		//search through the linked list to check completed threads
 		SLIST_FOREACH(datap, &head, entries)
 		{
 			if ((datap->thread_param).thread_complete == true)
@@ -488,6 +534,7 @@ cleanup:
 		pthread_join((datap->thread_param).mythread, NULL);
 	}
 
+	//free linked list
 	while (!SLIST_EMPTY(&head))
 	{
 		datap = SLIST_FIRST(&head);
