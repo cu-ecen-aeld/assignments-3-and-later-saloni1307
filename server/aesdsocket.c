@@ -139,7 +139,7 @@ static void timer_thread()
 	info = localtime(&rawtime);
 
 	//get the string for timestamp
-	timer_size = strftime(buff, BUFFER_MAX, "timestamp:%Y %b %a - %H:%M:%S\n", info);
+	timer_size = strftime(buff, BUFFER_MAX, "timestamp:%Y %b %d %a - %H:%M:%S\n", info);
 	if (timer_size == 0)
 	{
 		perror("timestamp");
@@ -156,6 +156,7 @@ static void timer_thread()
 	{
 		//write timestamp string to output file
 		timer_write = write(filefd, buff, timer_size);
+		printf("%s\n\r", buff);
 		if (timer_write != timer_size)
 		{
 			perror("writing timestamp in file");
@@ -319,9 +320,9 @@ void *thread_func(void *thread_param)
 
 exit:
 
-	pthread_exit(NULL);
+	//pthread_exit(NULL);
 
-	return ind_param;
+	return NULL;
 }
 
 int main(int argc, char *argv[])
@@ -340,6 +341,8 @@ int main(int argc, char *argv[])
 	int clock_id = CLOCK_MONOTONIC;
 
 	struct slist_data_s *datap = NULL;
+
+	remove(output_file);
 
 	//check command line arguments
 	if (argc == 1)
