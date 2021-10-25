@@ -41,7 +41,6 @@ int aesd_open(struct inode *inode, struct file *filp)
 	//Once our device is found, store a pointer to it in private_data field
 	filp->private_data = dev; /* for other methods */
 
-	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return 0;
 }
 
@@ -52,7 +51,6 @@ int aesd_release(struct inode *inode, struct file *filp)
 	 * TODO: handle release
 	 */
 
-	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return 0;
 }
 
@@ -60,12 +58,28 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
 	ssize_t retval = 0;
+	struct aesd_dev *dev = (struct aesd_dev *)filp->private_data;
+	struct aesd_buffer_entry *read_entry;
+	size_t read_entry_off=0;
+	
+	/*if (mutex_lock_interruptible(&dev->driver_lock))         
+		return -ERESTARTSYS;     */
+
 	PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle read
 	 */
 
-	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
+	//read_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->temp_buffer, *f_pos, &read_entry_off);
+
+	/*if(read_entry == 0) {
+		mutex_unlock(&dev->driver_lock);
+		return 0;
+	}*/
+	/*else {
+
+	}*/
+
 	return retval;
 }
 
@@ -73,12 +87,45 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
 	ssize_t retval = -ENOMEM;
+	long rc=0;
+	struct aesd_dev *dev = (struct aesd_dev *)filp->private_data;
+
+	if (mutex_lock_interruptible(&dev->driver_lock))         
+		return -ERESTARTSYS;
+
 	PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle write
 	 */
+	if(dev->temp_entry.size != 0) {
+		dev->temp_entry.buffptr = kmalloc(count, GFP_KERNEL);
+		if(dev->temp_entry.buffptr == NULL) {
+			goto cleanup;
+		}
+	}
 
-	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
+	else {
+		dev->temp_entry.buffptr = krealloc(dev->temp_entry.buffptr, dev->temp_entry.size+count , GFP_KERNEL);
+		if(dev->temp_entry.buffptr == NULL) {
+			goto cleanup;
+		}
+	}
+
+	rc = copy_from_user(&(dev->temp_entry.buffptr), buf, count);
+	if(rc) {
+		PDEBUG("copy_from_user %ld", rc);
+		retval = -EFAULT;
+		goto cleanup;
+	}
+	dev->temp_entry.size += count;
+
+	aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
+
+	retval = count;
+
+
+cleanup:
+	mutex_unlock(&dev->driver_lock);
 	return retval;
 }
 struct file_operations aesd_fops = {

@@ -48,21 +48,17 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         //if the character position is not in present entry
         if (char_offset >= size_of_buffptr)
         {
-
             //store the size of all previous entries
             total_entry = size_of_buffptr;
-
             //go to next entry in circular buffer
             entry_position++;
             if (entry_position >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
             {
                 entry_position = 0;
             }
-
             //get size of all entries traversed
             size_of_buffptr += buffer->entry[entry_position].size;
         }
-
         //if character position is in present entry
         else
         {
@@ -71,9 +67,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             //return entry struct
             return (&(buffer->entry[entry_position]));
         }
-
     } while (entry_position != buffer->in_offs);
-
     return NULL;
 }
 
