@@ -17,11 +17,13 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
+#include <linux/slab.h>
+
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Saloni Shah"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -29,9 +31,17 @@ struct aesd_dev aesd_device;
 int aesd_open(struct inode *inode, struct file *filp)
 {
 	PDEBUG("open");
+	struct aesd_dev *dev;
 	/**
 	 * TODO: handle open
 	 */
+	//Get pointer to our device
+	dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+
+	//Once our device is found, store a pointer to it in private_data field
+	filp->private_data = dev; /* for other methods */
+
+	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return 0;
 }
 
@@ -41,6 +51,8 @@ int aesd_release(struct inode *inode, struct file *filp)
 	/**
 	 * TODO: handle release
 	 */
+
+	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return 0;
 }
 
@@ -52,6 +64,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	/**
 	 * TODO: handle read
 	 */
+
+	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return retval;
 }
 
@@ -63,6 +77,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	/**
 	 * TODO: handle write
 	 */
+
+	printk(KERN_ALERT "Inside %s function\n", __FUNCTION__);
 	return retval;
 }
 struct file_operations aesd_fops = {
@@ -105,6 +121,8 @@ int aesd_init_module(void)
 	/**
 	 * TODO: initialize the AESD specific portion of the device
 	 */
+	aesd_circular_buffer_init(&aesd_device.temp_buffer);
+	mutex_init(&aesd_device.driver_lock);
 
 	result = aesd_setup_cdev(&aesd_device);
 
