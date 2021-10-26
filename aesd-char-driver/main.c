@@ -109,7 +109,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	ssize_t retval = -ENOMEM;
 	ssize_t bytes_not_written = 0;
 	char *newline = NULL;
-	char *entry = NULL;
+	const char *entry = NULL;
 	struct aesd_dev *dev = NULL;
 
 	dev = filp->private_data;
