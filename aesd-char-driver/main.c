@@ -152,7 +152,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	if (newline != NULL)
 	{
 		entry = aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
-		if (entry)
+		if (entry != NULL)
 		{
 			kfree(entry);
 		}

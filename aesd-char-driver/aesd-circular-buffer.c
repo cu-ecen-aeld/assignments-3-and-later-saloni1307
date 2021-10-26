@@ -143,7 +143,7 @@ void aesd_cicular_buffer_free(struct aesd_circular_buffer *buffer)
             kfree(entry->buffptr);
 
 #else
-            free(entry->buffptr);
+            free((char *)entry->buffptr);
 
 #endif
         }
