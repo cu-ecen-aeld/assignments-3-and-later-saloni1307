@@ -1,3 +1,4 @@
-sudo ./aesdchar_unload
 make
+sudo ./aesdchar_unload
+
 sudo ./aesdchar_load

@@ -87,13 +87,14 @@ void signal_handler(int signo)
 int cleanup()
 {
 
-	printf("in cleanup\n\r");
-
 	//destroy mutex
 	pthread_mutex_destroy(&data_mutex);
 
+#ifndef USE_AESD_CHAR_DEVICE
 	//close output file
 	close(filefd);
+
+#endif
 
 	//close logging file
 	closelog();
@@ -184,6 +185,7 @@ exit_timer:
 }
 #endif
 
+long end_pos = 0;
 
 //function to be executed on thread creation
 void *thread_func(void *thread_param)
@@ -200,11 +202,19 @@ void *thread_func(void *thread_param)
 	long wrbuff_size = 0;
 	long malloc_size = BUFFER_MAX, realloc_size = BUFFER_MAX;
 	int break_loop = 0;
-	long cur_pos = 0, end_pos = 0, required_memory = 0;
+	long cur_pos = 0, required_memory = 0;
 	long bytes = 0;
 	char *new_line = NULL;
 
 	printf("Executing thread with fd = %d\n\r", th_newfd);
+
+		//open /var/tmp/aesdsocketdata file
+	filefd = open(output_file, O_RDWR | O_CREAT, 0644);
+	if (filefd < 0)
+	{
+		perror("Open file");
+		goto exit;
+	}
 
 	read_buffer = (char *)malloc(sizeof(char *)*BUFFER_MAX);
 	memset(read_buffer, '\0', BUFFER_MAX);
@@ -252,14 +262,21 @@ void *thread_func(void *thread_param)
 		goto exit;
 	}
 
+#ifndef USE_AESD_CHAR_DEVICE
 	//save the end of file
 	end_pos = lseek(filefd, 0, SEEK_END);
-
-	//seek the start of the file
+					//seek the start of the file
 	lseek(filefd, 0, SEEK_SET);
 
-	//release mutex lock after writing to file
+#else
+	end_pos += write_byte;
+
+#endif
+
+			//release mutex lock after writing to file
 	pthread_mutex_unlock(&data_mutex);
+
+	
 
 	//execute read and send untill end of file reached
 	while (bytes != end_pos)
@@ -306,8 +323,11 @@ void *thread_func(void *thread_param)
 		pthread_mutex_unlock(&data_mutex);
 		bytes += wrbuff_size;
 
+#ifndef USE_AESD_CHAR_DEVICE
 		//save the current position of file
 		cur_pos = lseek(filefd, 0, SEEK_CUR);
+
+#endif
 
 		//send contents of write_buffer to client
 		send_byte = send(th_newfd, write_buffer, wrbuff_size, 0);
@@ -322,6 +342,7 @@ void *thread_func(void *thread_param)
 
 	free(read_buffer);
 	close(th_newfd);
+	close(filefd);
 
 	printf("Closed connection from %s\n\r", str);
 	syslog(LOG_INFO, "Closed connection from %s", str);
@@ -329,8 +350,6 @@ void *thread_func(void *thread_param)
 	ind_param->thread_complete = true;
 
 exit:
-
-	//pthread_exit(NULL);
 
 	return NULL;
 }
@@ -381,7 +400,7 @@ int main(int argc, char *argv[])
 	//initialize mutex
 	if (pthread_mutex_init(&data_mutex, NULL) != 0)
 	{
-		printf("\n mutex init failed\n");
+		perror("mutex init failed");
 		goto cleanup;
 	}
 
@@ -452,6 +471,7 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
+#ifndef USE_AESD_CHAR_DEVICE
 	//open /var/tmp/aesdsocketdata file
 	filefd = open(output_file, O_RDWR | O_CREAT, 0644);
 	if (filefd < 0)
@@ -459,6 +479,8 @@ int main(int argc, char *argv[])
 		perror("Open file");
 		goto cleanup;
 	}
+
+#endif
 
 #ifndef USE_AESD_CHAR_DEVICE 
 	//for timer functionality
@@ -527,7 +549,7 @@ int main(int argc, char *argv[])
 		//create a thread
 		if (pthread_create(&((datap->thread_param).mythread), NULL, &thread_func, (void *)&(datap->thread_param)) != 0)
 		{
-			printf("error in pthread_create\n");
+			perror("error in pthread_create");
 			goto cleanup;
 		}
 

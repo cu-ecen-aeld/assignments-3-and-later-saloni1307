@@ -76,6 +76,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	if (read_entry == 0)
 	{
 		retval = 0;
+		*f_pos = 0;
 		goto cleanup;
 	}
 
@@ -105,6 +106,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 				   loff_t *f_pos)
 {
 	ssize_t retval = -ENOMEM;
+	ssize_t bytes_not_written = 0;
 	char *newline = NULL;
 	const char *entry = NULL;
 	struct aesd_dev *dev = NULL;
@@ -128,14 +130,22 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 		}
 	}
 
-	retval = copy_from_user((void *)(&dev->temp_entry.buffptr[dev->temp_entry.size]), buf, count);
-	if (retval)
-	{
-		PDEBUG("copy_from_user %ld", retval);
-		retval = -EFAULT;
-		goto cleanup;
+	else {
+		dev->temp_entry.buffptr = krealloc(dev->temp_entry.buffptr, dev->temp_entry.size+count, GFP_KERNEL);
+		if (dev->temp_entry.buffptr == 0)
+		{
+			retval = -ENOMEM;
+			goto cleanup;
+		}
 	}
-	dev->temp_entry.size += count;
+
+	bytes_not_written = copy_from_user((void *)(&dev->temp_entry.buffptr[dev->temp_entry.size]), buf, count);
+	if (bytes_not_written != 0)
+	{
+		PDEBUG("copy_from_user %ld", bytes_not_written);
+	}
+	retval = count - bytes_not_written;
+	dev->temp_entry.size += retval;
 
 	newline = strchr(dev->temp_entry.buffptr, '\n');
 	if (newline != NULL)
@@ -148,9 +158,10 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
 		dev->temp_entry.buffptr = NULL;
 		dev->temp_entry.size = 0;
+		newline = NULL;
 	}
 
-	retval = count;
+	*f_pos = 0;
 
 cleanup:
 	mutex_unlock(&dev->driver_lock);
