@@ -148,7 +148,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	retval = count - bytes_not_written;
 	dev->temp_entry.size += retval;
 
-	newline = strchr(dev->temp_entry.buffptr, '\n');
+	newline = (char *)memchr(dev->temp_entry.buffptr, '\n', dev->temp_entry.size);
 	if (newline != NULL)
 	{
 		entry = aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
