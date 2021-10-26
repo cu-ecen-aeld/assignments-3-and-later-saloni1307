@@ -18,6 +18,8 @@
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
 #include <linux/slab.h>
+#include <linux/mutex.h>
+#include <asm/uaccess.h>
 
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
@@ -59,27 +61,44 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
 	ssize_t retval = 0;
 	struct aesd_dev *dev = (struct aesd_dev *)filp->private_data;
-	struct aesd_buffer_entry *read_entry;
+	struct aesd_buffer_entry *read_entry = NULL;
 	size_t read_entry_off=0;
+	ssize_t rc=0;
 	
-	/*if (mutex_lock_interruptible(&dev->driver_lock))         
-		return -ERESTARTSYS;     */
+	if (mutex_lock_interruptible(&dev->driver_lock) != 0)         
+		return -ERESTARTSYS;     
 
 	PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle read
 	 */
 
-	//read_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->temp_buffer, *f_pos, &read_entry_off);
+	read_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->temp_buffer, *f_pos, &read_entry_off);
 
-	/*if(read_entry == 0) {
-		mutex_unlock(&dev->driver_lock);
-		return 0;
-	}*/
-	/*else {
+	if(read_entry == 0) {
+		retval = 0;
+		goto cleanup;
+	}
+	else {
+		if(count <= (read_entry->size - read_entry_off)) {
+			retval = count;
+		}
+		else {
+			retval = read_entry->size - read_entry_off;
+		}
+	}
 
-	}*/
+	rc = copy_to_user(buf, (read_entry->buffptr + read_entry_off),  retval);
+	if(rc) {
+		PDEBUG("copy_to_user %ld", rc);
+		retval = -EFAULT;
+		goto cleanup;
+	}
 
+	*f_pos += retval;
+
+cleanup:
+	mutex_unlock(&dev->driver_lock);
 	return retval;
 }
 
@@ -87,19 +106,26 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
 	ssize_t retval = -ENOMEM;
-	long rc=0;
-	struct aesd_dev *dev = (struct aesd_dev *)filp->private_data;
+	ssize_t rc=0;
+	char *newline = NULL;
+	const char *entry = NULL;
+	struct aesd_dev *dev = NULL;
+	
+	dev = filp->private_data;
 
-	if (mutex_lock_interruptible(&dev->driver_lock))         
+	if ((mutex_lock_interruptible(&dev->driver_lock)) != 0)         
 		return -ERESTARTSYS;
+
+	PDEBUG("mutex locked");
 
 	PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
 	/**
 	 * TODO: handle write
 	 */
-	if(dev->temp_entry.size != 0) {
+	if(dev->temp_entry.size == 0) {
 		dev->temp_entry.buffptr = kmalloc(count, GFP_KERNEL);
-		if(dev->temp_entry.buffptr == NULL) {
+		if(dev->temp_entry.buffptr == 0) {
+			retval = -ENOMEM;
 			goto cleanup;
 		}
 	}
@@ -107,21 +133,31 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	else {
 		dev->temp_entry.buffptr = krealloc(dev->temp_entry.buffptr, dev->temp_entry.size+count , GFP_KERNEL);
 		if(dev->temp_entry.buffptr == NULL) {
+			retval = -ENOMEM;
 			goto cleanup;
 		}
 	}
 
-	rc = copy_from_user(&(dev->temp_entry.buffptr), buf, count);
+	rc = copy_from_user((void *)(&dev->temp_entry.buffptr[dev->temp_entry.size]), buf, count);
 	if(rc) {
 		PDEBUG("copy_from_user %ld", rc);
-		retval = -EFAULT;
-		goto cleanup;
+		//retval = -EFAULT;
+		//goto cleanup;
 	}
-	dev->temp_entry.size += count;
+	retval = count - rc;
+	dev->temp_entry.size += retval;
 
-	aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
+	newline = (char *)memchr(dev->temp_entry.buffptr, '\n', dev->temp_entry.size);
+	if(newline != NULL) {
+		entry = aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
+		if(entry) {
+			kfree(entry);
+		}
 
-	retval = count;
+		dev->temp_entry.buffptr = NULL;
+		dev->temp_entry.size = 0;
+	}
+	//aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));
 
 
 cleanup:
@@ -189,6 +225,7 @@ void aesd_cleanup_module(void)
 	/**
 	 * TODO: cleanup AESD specific poritions here as necessary
 	 */
+	aesd_cicular_buffer_free(&aesd_device.temp_buffer);
 
 	unregister_chrdev_region(devno, 1);
 }
