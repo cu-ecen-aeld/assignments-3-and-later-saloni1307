@@ -34,6 +34,9 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         return NULL;
     }
+    if(buffer->out_offs==buffer->in_offs && (!buffer->full)) {
+        return NULL;
+    }
 
     //get current entry position in the circular buffer
     uint8_t entry_position = buffer->out_offs;
@@ -78,8 +81,14 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
+    char *return_ptr = NULL;
+
+    if(buffer == NULL || add_entry == NULL) {
+        return return_ptr;
+    }
+
     //add entry in the circular buffer
     buffer->entry[buffer->in_offs] = *add_entry;
     //advance to next position
@@ -93,6 +102,7 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     //advance out offset also if buffer is full
     if (buffer->full)
     {
+        return_ptr = buffer->entry[buffer->out_offs].buffptr;
         buffer->out_offs++;
         if (buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
         {
@@ -106,7 +116,7 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
         buffer->full = true;
     }
 
-    return;
+    return return_ptr;
 }
 
 /**
