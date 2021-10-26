@@ -35,7 +35,8 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         return NULL;
     }
-    if(buffer->out_offs==buffer->in_offs && (!buffer->full)) {
+    if (buffer->out_offs == buffer->in_offs && (!buffer->full))
+    {
         return NULL;
     }
 
@@ -82,40 +83,38 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-const char* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     char *return_ptr = NULL;
 
-    if(buffer == NULL || add_entry == NULL) {
+    if (buffer == NULL || add_entry == NULL)
+    {
         return return_ptr;
     }
+    if (buffer->full)
+    {
+        return_ptr = buffer->entry[buffer->in_offs].buffptr;
+    }
+
+    //advance out offset also if buffer is full
 
     //add entry in the circular buffer
     buffer->entry[buffer->in_offs] = *add_entry;
     //advance to next position
     buffer->in_offs++;
+    buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
-    if (buffer->in_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-    {
-        buffer->in_offs = 0;
-    }
-
-    //advance out offset also if buffer is full
     if (buffer->full)
     {
-        return_ptr = buffer->entry[buffer->out_offs].buffptr;
         buffer->out_offs++;
-        if (buffer->out_offs >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
-        {
-            buffer->out_offs = 0;
-        }
+        buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
 
     //check if buffer is full
     if (buffer->in_offs == buffer->out_offs)
-    {
         buffer->full = true;
-    }
+    else
+        buffer->full = false;
 
     return return_ptr;
 }
@@ -128,21 +127,24 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
     memset(buffer, 0, sizeof(struct aesd_circular_buffer));
 }
 
-void aesd_cicular_buffer_free(struct aesd_circular_buffer *buffer) {
+void aesd_cicular_buffer_free(struct aesd_circular_buffer *buffer)
+{
     uint8_t index;
     struct aesd_buffer_entry *entry;
 
-    AESD_CIRCULAR_BUFFER_FOREACH(entry,buffer,index) {
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, buffer, index)
+    {
 
-        if(entry->buffptr != NULL) {
+        if (entry->buffptr != NULL)
+        {
 
-        #ifdef __KERNEL__
+#ifdef __KERNEL__
             kfree(entry->buffptr);
 
-        #else
+#else
             free(entry->buffptr);
 
-        #endif
+#endif
         }
     }
 }

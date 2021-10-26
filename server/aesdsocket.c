@@ -24,7 +24,15 @@
 
 #include "queue.h"
 
+#define USE_AESD_CHAR_DEVICE 1
+
+#ifdef USE_AESD_CHAR_DEVICE
+#define output_file "/dev/aesdchar"
+
+#else
 #define output_file "/var/tmp/aesdsocketdata"
+#endif
+
 #define BUFFER_MAX 100
 #define MAX_CONNECTS 10
 
@@ -64,7 +72,6 @@ void signal_handler(int signo)
 	if (signo == SIGINT || signo == SIGTERM)
 	{
 		syslog(LOG_INFO, "Caught signal, exiting");
-		printf("Caught Signal, Exiting\n\r");
 
 		//shutdown the socket
 		if (shutdown(sockfd, SHUT_RDWR))
@@ -125,6 +132,7 @@ static inline void timespec_add(struct timespec *result,
 	}
 }
 
+#ifndef USE_AESD_CHAR_DEVICE 
 //thread to be executed for timer
 static void timer_thread()
 {
@@ -174,6 +182,8 @@ static void timer_thread()
 exit_timer:
 	free(buff);
 }
+#endif
+
 
 //function to be executed on thread creation
 void *thread_func(void *thread_param)
@@ -335,11 +345,6 @@ int main(int argc, char *argv[])
 	int daemon = 0;
 	pid_t pid;
 
-	struct sigevent sev;
-	struct timespec start_time;
-
-	int clock_id = CLOCK_MONOTONIC;
-
 	struct slist_data_s *datap = NULL;
 
 	remove(output_file);
@@ -455,9 +460,14 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
+#ifndef USE_AESD_CHAR_DEVICE 
 	//for timer functionality
 	if ((daemon == 0) || (pid == 0))
 	{
+		struct sigevent sev;
+	struct timespec start_time;
+
+	int clock_id = CLOCK_MONOTONIC;
 		memset(&sev, 0, sizeof(struct sigevent));
 		sev.sigev_notify = SIGEV_THREAD;
 		sev.sigev_notify_function = timer_thread;
@@ -487,6 +497,7 @@ int main(int argc, char *argv[])
 				goto cleanup;
 			}
 	}
+#endif
 
 	while (!signal_exit_code)
 	{ //till we get a signal
