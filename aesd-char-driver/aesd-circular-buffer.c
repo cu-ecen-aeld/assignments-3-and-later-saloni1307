@@ -13,6 +13,7 @@
 #include <linux/slab.h>
 #else
 #include <string.h>
+#include <stdlib.h>
 #endif
 
 #include "aesd-circular-buffer.h"
@@ -30,6 +31,13 @@
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
                                                                           size_t char_offset, size_t *entry_offset_byte_rtn)
 {
+        //get current entry position in the circular buffer
+    uint8_t entry_position = buffer->out_offs;
+       //get size of that entry
+    size_t size_of_buffptr = buffer->entry[entry_position].size;
+    //variable to store size of all previous entries
+    int total_entry = 0;
+
     //check if the buffer is empty
     if (buffer == NULL)
     {
@@ -39,13 +47,6 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         return NULL;
     }
-
-    //get current entry position in the circular buffer
-    uint8_t entry_position = buffer->out_offs;
-    //get size of that entry
-    size_t size_of_buffptr = buffer->entry[entry_position].size;
-    //variable to store size of all previous entries
-    int total_entry = 0;
 
     //traverse the buffer until you reach end of buffer or you find the character position
     do
@@ -83,7 +84,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, struct aesd_buffer_entry *add_entry)
 {
     char *return_ptr = NULL;
 

@@ -105,12 +105,14 @@ int cleanup()
 	if (signal_exit_code)
 	{
 
+#ifndef USE_AESD_CHAR_DEVICE 
 		//delete output file
 		if (remove(output_file) < 0)
 		{
 			perror("Delete tmp file");
 			return -1;
 		}
+#endif
 
 		if (timer_delete(timerid) != 0) {
                 perror("Error deleting timer!");
