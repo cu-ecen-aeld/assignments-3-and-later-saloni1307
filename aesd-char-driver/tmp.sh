@@ -1,3 +1,4 @@
+make clean
 make
 sudo ./aesdchar_unload
 

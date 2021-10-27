@@ -200,6 +200,7 @@ void *thread_func(void *thread_param)
 	long write_byte = 0, recv_byte = 0, send_byte = 0, read_byte = 0;
 	char *read_buffer = NULL;
 	char *write_buffer = NULL;
+	char tmp_buffer[1] = {0};
 	long rdbuff_size = 0;
 	long wrbuff_size = 0;
 	long malloc_size = BUFFER_MAX, realloc_size = BUFFER_MAX;
@@ -218,7 +219,7 @@ void *thread_func(void *thread_param)
 		goto exit;
 	}
 
-	read_buffer = (char *)malloc(sizeof(char *)*BUFFER_MAX);
+	read_buffer = (char *)malloc(sizeof(char)*BUFFER_MAX);
 	memset(read_buffer, '\0', BUFFER_MAX);
 	if (read_buffer == NULL)
 	{
@@ -241,7 +242,7 @@ void *thread_func(void *thread_param)
 
 			malloc_size += recv_byte;
 			//realloc required size
-			read_buffer = (char *)realloc(read_buffer, sizeof(char) * malloc_size);
+			read_buffer = (char *)realloc(read_buffer, sizeof(char)*malloc_size);
 		}
 
 		//copy received buffer in another read_buffer
@@ -288,7 +289,7 @@ void *thread_func(void *thread_param)
 		required_memory = end_pos - cur_pos; //get the required memory size for one line
 
 		//send contents writen in output file to client line by line
-		write_buffer = (char *)malloc(sizeof(char *) * BUFFER_MAX);
+		write_buffer = (char *)malloc(sizeof(char)*BUFFER_MAX);
 
 		if (write_buffer == NULL)
 		{
@@ -303,16 +304,18 @@ void *thread_func(void *thread_param)
 		{
 
 			//store contents of output file in write_buffer
-			read_byte = read(filefd, write_buffer + wrbuff_size, sizeof(char));
+			//read_byte = read(filefd, write_buffer + wrbuff_size, sizeof(char));
+			read_byte = read(filefd, tmp_buffer, sizeof(char));
 
 			if (realloc_size < required_memory)
 			{
 				realloc_size += required_memory;
 
 				//realloc memory in case of insufficient space in buffer
-				write_buffer = (char *)realloc(write_buffer, sizeof(char) * realloc_size);
+				write_buffer = (char *)realloc(write_buffer, sizeof(char)*realloc_size);
 			}
 
+			memcpy(&write_buffer[wrbuff_size], tmp_buffer, read_byte);
 			wrbuff_size += read_byte;
 
 			//search for newline character in the buffer
