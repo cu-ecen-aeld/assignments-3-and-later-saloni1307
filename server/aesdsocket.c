@@ -87,9 +87,6 @@ void signal_handler(int signo)
 int cleanup()
 {
 
-	//destroy mutex
-	pthread_mutex_destroy(&data_mutex);
-
 #ifndef USE_AESD_CHAR_DEVICE
 	//close output file
 	close(filefd);
@@ -101,6 +98,7 @@ int cleanup()
 
 	//close server socket
 	close(sockfd);
+	close(new_sockfd);
 
 	if (signal_exit_code)
 	{
@@ -112,13 +110,17 @@ int cleanup()
 			perror("Delete tmp file");
 			return -1;
 		}
-#endif
 
 		if (timer_delete(timerid) != 0) {
                 perror("Error deleting timer!");
                 return -1;
             }
+
+#endif
 	}
+
+		//destroy mutex
+	pthread_mutex_destroy(&data_mutex);
 
 	return 0;
 }
