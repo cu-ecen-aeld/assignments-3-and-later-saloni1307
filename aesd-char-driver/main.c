@@ -221,6 +221,9 @@ int aesd_init_module(void)
 	{
 		unregister_chrdev_region(dev, 1);
 	}
+
+	PDEBUG("AESD DRIVER MODULE INITIALIZED");
+
 	return result;
 }
 
