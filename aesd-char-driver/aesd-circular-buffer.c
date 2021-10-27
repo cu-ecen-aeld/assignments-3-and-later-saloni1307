@@ -43,10 +43,10 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         return NULL;
     }
-    if (buffer->out_offs == buffer->in_offs && (!buffer->full))
+    /*if (buffer->out_offs == buffer->in_offs && (!buffer->full))
     {
         return NULL;
-    }
+    }*/
 
     //traverse the buffer until you reach end of buffer or you find the character position
     do
@@ -57,11 +57,12 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             //store the size of all previous entries
             total_entry = size_of_buffptr;
             //go to next entry in circular buffer
-            entry_position++;
+            entry_position = (entry_position+1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+            /*entry_position++;
             if (entry_position >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
             {
                 entry_position = 0;
-            }
+            }*/
             //get size of all entries traversed
             size_of_buffptr += buffer->entry[entry_position].size;
         }
@@ -101,14 +102,15 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
 
     //add entry in the circular buffer
     buffer->entry[buffer->in_offs] = *add_entry;
+
     //advance to next position
-    buffer->in_offs++;
-    buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    //buffer->in_offs++;
+    buffer->in_offs = (buffer->in_offs+1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
     if (buffer->full)
     {
-        buffer->out_offs++;
-        buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        //buffer->out_offs++;
+        buffer->out_offs = (buffer->out_offs+1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
 
     //check if buffer is full

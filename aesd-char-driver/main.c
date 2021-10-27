@@ -18,8 +18,11 @@
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
 #include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/string.h>
 
 #include "aesdchar.h"
+
 int aesd_major = 0; // use dynamic major
 int aesd_minor = 0;
 
@@ -123,7 +126,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	 */
 	if (dev->temp_entry.size == 0)
 	{
-		dev->temp_entry.buffptr = kmalloc(count, GFP_KERNEL);
+		dev->temp_entry.buffptr = kmalloc(count * sizeof(char), GFP_KERNEL);
 		if (dev->temp_entry.buffptr == 0)
 		{
 			retval = -ENOMEM;
@@ -131,8 +134,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 		}
 	}
 
-	else {
-		dev->temp_entry.buffptr = krealloc(dev->temp_entry.buffptr, dev->temp_entry.size+count, GFP_KERNEL);
+	else
+	{
+		dev->temp_entry.buffptr = krealloc(dev->temp_entry.buffptr, dev->temp_entry.size + count, GFP_KERNEL);
 		if (dev->temp_entry.buffptr == 0)
 		{
 			retval = -ENOMEM;
@@ -145,10 +149,11 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	{
 		PDEBUG("copy_from_user %ld", bytes_not_written);
 	}
+
 	retval = count - bytes_not_written;
 	dev->temp_entry.size += retval;
 
-	newline = (char *)memchr(dev->temp_entry.buffptr, '\n', dev->temp_entry.size);
+	newline = (char *)strnchr(dev->temp_entry.buffptr, dev->temp_entry.size, '\n');
 	if (newline != NULL)
 	{
 		entry = aesd_circular_buffer_add_entry(&(dev->temp_buffer), &(dev->temp_entry));

@@ -267,13 +267,14 @@ void *thread_func(void *thread_param)
 #ifndef USE_AESD_CHAR_DEVICE
 	//save the end of file
 	end_pos = lseek(filefd, 0, SEEK_END);
-					//seek the start of the file
-	lseek(filefd, 0, SEEK_SET);
 
 #else
 	end_pos += write_byte;
 
 #endif
+
+						//seek the start of the file
+	lseek(filefd, 0, SEEK_SET);
 
 			//release mutex lock after writing to file
 	pthread_mutex_unlock(&data_mutex);
