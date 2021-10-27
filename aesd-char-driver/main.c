@@ -138,6 +138,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 		if (dev->temp_entry.buffptr == 0)
 		{
 			retval = -ENOMEM;
+			kfree((void *)dev->temp_entry.buffptr);
 			goto cleanup;
 		}
 	}
@@ -210,7 +211,7 @@ int aesd_init_module(void)
 	/**
 	 * TODO: initialize the AESD specific portion of the device
 	 */
-	aesd_circular_buffer_init(&aesd_device.temp_buffer);
+	//aesd_circular_buffer_init(&aesd_device.temp_buffer);
 	mutex_init(&aesd_device.driver_lock);
 
 	result = aesd_setup_cdev(&aesd_device);
