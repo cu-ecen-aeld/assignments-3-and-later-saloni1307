@@ -49,10 +49,19 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     }*/
 
     //traverse the buffer until you reach end of buffer or you find the character position
-    do
+    while(1)
     {
         //if the character position is not in present entry
-        if (char_offset >= size_of_buffptr)
+        if (char_offset < size_of_buffptr)
+        {
+            //get the position of the character
+            *entry_offset_byte_rtn = char_offset - total_entry;
+            //return entry struct
+            return (&(buffer->entry[entry_position]));
+            
+        }
+        //if character position is in present entry
+        else
         {
             //store the size of all previous entries
             total_entry = size_of_buffptr;
@@ -66,15 +75,11 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             //get size of all entries traversed
             size_of_buffptr += buffer->entry[entry_position].size;
         }
-        //if character position is in present entry
-        else
-        {
-            //get the position of the character
-            *entry_offset_byte_rtn = char_offset - total_entry;
-            //return entry struct
-            return (&(buffer->entry[entry_position]));
-        }
-    } while (entry_position != buffer->out_offs);
+
+        if(entry_position == buffer->out_offs)
+            break;
+    } 
+    //while (entry_position != buffer->out_offs);
     return NULL;
 }
 
