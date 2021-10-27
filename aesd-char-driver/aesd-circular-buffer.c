@@ -74,7 +74,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             //return entry struct
             return (&(buffer->entry[entry_position]));
         }
-    } while (entry_position != buffer->in_offs);
+    } while (entry_position != buffer->out_offs);
     return NULL;
 }
 
