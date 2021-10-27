@@ -216,6 +216,20 @@ char *new_line = NULL;
 
 printf("Executing thread with fd = %d\n\r", th_newfd);
 
+
+/* sig status */
+    int sig_status = 0;
+/* Add signals to be masked */
+    sigset_t x; // for each thread a signal handler
+    int ret_sig_stat_1 = 0,ret_sig_stat_2 = 0,ret_sig_stat_3 = 0;
+    ret_sig_stat_1 = sigemptyset(&x); 
+    ret_sig_stat_2 = sigaddset(&x,SIGINT);
+    ret_sig_stat_3 = sigaddset(&x,SIGTERM);
+    if( (ret_sig_stat_1 == -1) || (ret_sig_stat_2 == -1) || (ret_sig_stat_3 == -1)  ) 
+    {
+      perror("sig signal set");
+    }
+
 //open /var/tmp/aesdsocketdata file
 filefd = open(output_file, O_RDWR | O_CREAT, 0644);
 if (filefd < 0)
@@ -231,6 +245,12 @@ if (read_buffer == NULL)
 perror("Read Malloc failed");
 goto exit;
 }
+
+sig_status = sigprocmask(SIG_BLOCK, &x, NULL);
+    if(sig_status == -1)
+    {
+      perror("sig_status - 1");
+    }
 
 do
 {
@@ -267,6 +287,12 @@ rdbuff_size += recv_byte;
 
 break_loop = 0;
 
+sig_status = sigprocmask(SIG_UNBLOCK, &x, NULL);
+    if(sig_status == -1)
+    {
+      perror("sig_status - 2");
+    }
+
 //get mutex lock for thread-safe writing in output file
 pthread_mutex_lock(&data_mutex);
 
@@ -287,12 +313,18 @@ end_pos += write_byte;
 
 #endif
 
-//seek the start of the file
-lseek(filefd, 0, SEEK_SET);
-
 //release mutex lock after writing to file
 pthread_mutex_unlock(&data_mutex);
 
+//seek the start of the file
+lseek(filefd, 0, SEEK_SET);
+
+/* sig status */
+    sig_status = sigprocmask(SIG_BLOCK, &x, NULL);
+    if(sig_status == -1)
+    {
+      perror("sig_status - 1");
+    }
 
 //execute read and send untill end of file reached
 while (bytes < end_pos)
@@ -371,6 +403,12 @@ bytes += wrbuff_size;
 free(write_buffer);
 write_buffer = NULL;
 }
+
+ sig_status = sigprocmask(SIG_UNBLOCK, &x, NULL);
+    if(sig_status == -1)
+    {
+      perror("sig_status - 2");
+    }
 
 free(read_buffer);
 read_buffer = NULL;
