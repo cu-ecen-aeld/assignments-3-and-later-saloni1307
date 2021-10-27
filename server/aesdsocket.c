@@ -36,7 +36,7 @@
 #define BUFFER_MAX 100
 #define MAX_CONNECTS 10
 
-int filefd, sockfd, new_sockfd;
+int sockfd, new_sockfd;
 
 char buffer[BUFFER_MAX];
 
@@ -201,6 +201,7 @@ void *thread_func(void *thread_param)
 //get thread parameters
 struct thread_data *ind_param = (struct thread_data *)thread_param;
 int th_newfd = ind_param->thread_sockfd;
+int filefd;
 
 long write_byte = 0, recv_byte = 0, send_byte = 0, read_byte = 0;
 char *read_buffer = NULL;
