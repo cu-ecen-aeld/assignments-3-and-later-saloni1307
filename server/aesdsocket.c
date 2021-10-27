@@ -36,9 +36,7 @@
 #define BUFFER_MAX 100
 #define MAX_CONNECTS 10
 
-int sockfd, new_sockfd;
-
-char buffer[BUFFER_MAX];
+int sockfd;
 
 char *str;
 int signal_exit_code = 0;
@@ -98,7 +96,6 @@ close(filefd);
 
 //close server socket
 close(sockfd);
-close(new_sockfd);
 
 //close logging file
 closelog();
@@ -202,6 +199,7 @@ void *thread_func(void *thread_param)
 struct thread_data *ind_param = (struct thread_data *)thread_param;
 int th_newfd = ind_param->thread_sockfd;
 int filefd;
+char buffer[BUFFER_MAX];
 
 long write_byte = 0, recv_byte = 0, send_byte = 0, read_byte = 0;
 char *read_buffer = NULL;
@@ -435,6 +433,7 @@ struct sockaddr_in server_addr, new_addr;
 socklen_t addr_size;
 int daemon = 0;
 pid_t pid;
+int new_sockfd;
 
 struct slist_data_s *datap = NULL;
 
