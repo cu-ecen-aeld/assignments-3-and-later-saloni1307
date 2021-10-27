@@ -295,7 +295,7 @@ pthread_mutex_unlock(&data_mutex);
 
 
 //execute read and send untill end of file reached
-while (bytes != end_pos)
+while (bytes < end_pos)
 {
 wrbuff_size = 0;
 required_memory = end_pos - cur_pos; //get the required memory size for one line
@@ -438,7 +438,7 @@ goto cleanup;
 }
 
 //open socket connection
-sockfd = socket(PF_INET, SOCK_STREAM, 0);
+sockfd = socket(AF_INET, SOCK_STREAM, 0);
 if (sockfd < 0)
 {
 perror("Socket creation");
