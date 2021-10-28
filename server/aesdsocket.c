@@ -230,7 +230,7 @@ printf("Executing thread with fd = %d\n\r", th_newfd);
     }
 
 //open /var/tmp/aesdsocketdata file
-filefd = open(output_file, O_RDWR | O_CREAT, 0644);
+filefd = open(output_file, O_RDWR | O_CREAT | O_TRUNC, 0666);
 if (filefd < 0)
 {
 perror("Open file");
@@ -437,7 +437,7 @@ int new_sockfd;
 
 struct slist_data_s *datap = NULL;
 
-remove(output_file);
+//remove(output_file);
 
 //check command line arguments
 if (argc == 1)
